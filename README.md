@@ -1,7 +1,7 @@
-# Script I use to install essential apps on new ubuntu systems
+## Script I use to install essential apps on new ubuntu systems
 
 
-## Functions
+### Functions
 - Install essentials:
   - [htop](https://htop.dev/)
   - [screen](https://www.gnu.org/software/screen/) 
@@ -14,6 +14,6 @@
 - Option to install latest LTS version of [NodeJS](https://nodejs.org/en/) and [NPM](https://www.npmjs.com/)
 
 
-## Disclaimer
+### Disclaimer
 > I am by no means an expert in this field.
 > You use this script at your own risk.
