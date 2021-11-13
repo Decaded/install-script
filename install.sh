@@ -2,20 +2,26 @@
 sudo -n true
 test $? -eq 0 || exit 1 "You need sudo privilege to run this script"
 
-APPS="htop screen nload nano firewalld"
+APPS="htop screen nload nano firewalld fail2ban"
 
 echo "Updating package lists"
 sudo apt update # get the latest package lists
 
 echo "\n"
+echo "#######################################################"
 echo "Installation of essential apps will start in 5 seconds"
 echo "Hit Ctrl+C now to abort"
+echo "#######################################################"
 sleep 6
 
 sudo apt install $APPS -y       # do the magic
 sudo systemctl enable firewalld # enable firewall on boot
+# download customized fail2ban config
+sudo wget -O /etc/fail2ban/jail.local https://gist.githubusercontent.com/Decaded/4a2b37853afb82ecd91da2971726234a/raw/be9aa897e0fa7ed267b75bd5110c837f7a39000c/jail.local
+sudo service fail2ban restart
 
 echo "Essential programs installed successfully."
+echo "fail2ban config is located in /etc/fail2ban/jail.local"
 echo "\n"
 
 echo -n "Install NGINX and PHP? (y/n) "
