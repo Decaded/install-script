@@ -23,7 +23,12 @@ sudo service fail2ban restart
 echo "\n"
 echo "#######################################################"
 echo "Firewall configuration"
-echo "Please provide your current SSH port:"
+echo "## WARNING ##"
+echo "## THIS CAN CUT YOU OUT OF THE SERVER ##"
+echo "## CHECK TWICE BEFORE PROCEEDING ##"
+echo "## YOU HAVE BEEN WARNED ##"
+echo "\n"
+echo "Please provide your current SSH port (defalut is 22):"
 read sshPort
 echo "Openning port $sshPort TCP..."
 sudo firewall-cmd --permanent --zone=public --add-port=$sshPort/tcp
