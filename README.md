@@ -21,7 +21,13 @@
 Download:
 ```bash
 $ wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
+```
+Add permissions to run:
+```bash
 $ sudo chmod +x install.sh
+```
+Run script:
+```bash
 $ ./install.sh
 ```
 You can remove `install.sh` after installation is complete
