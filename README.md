@@ -8,11 +8,13 @@
   - [nload](https://github.com/rolandriegel/nload) 
   - [nano](https://www.nano-editor.org/) 
   - [firewalld](https://firewalld.org/)
+    - After installation will open provided SSH port
   - [fail2ban](https://github.com/fail2ban/fail2ban)
+
 - Option to install basic web server ([nginx](https://www.nginx.com/) & [php7.4](https://www.php.net/releases/7_4_0.php)-fpm)
   - opens 80 and 443 TCP/UDP ports in firewall 
   - removes [Apache2](https://httpd.apache.org/) if exist
-- Option to install latest LTS version of [NodeJS](https://nodejs.org/en/) and [NPM](https://www.npmjs.com/)
+- Option to install [Node Version Manager](https://github.com/nvm-sh/nvm)
 
 
 ### Disclaimer
