@@ -17,6 +17,18 @@
 - Option to install [Node Version Manager](https://github.com/nvm-sh/nvm)
 
 
+### Usage
+Download:
+```bash
+$ wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
+$ sudo chmod +x install.sh
+$ ./install.sh
+```
+You can remove `install.sh` after installation is complete
+```bash
+$ rm install.sh
+```
+
 ### Disclaimer
 > I am by no means an expert in this field.
 > You use this script at your own risk.
