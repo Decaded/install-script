@@ -46,7 +46,7 @@ echo "\n"
 echo -n "Install NGINX and PHP? (y/n) "
 read answer
 if [ "$answer" != "${answer#[Yy]}" ]; then
-  sudo apt install nginx php7.4 php7.4-fpm -y
+  sudo apt install nginx php8.1 php8.1-fpm -y
 
   # remove apache2 if exist
   # why?
