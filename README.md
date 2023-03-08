@@ -11,7 +11,7 @@
     - After installation will open provided SSH port
   - [fail2ban](https://github.com/fail2ban/fail2ban)
 
-- Option to install basic web server ([nginx](https://www.nginx.com/) & [php7.4](https://www.php.net/releases/7_4_0.php)-fpm)
+- Option to install basic web server ([nginx](https://www.nginx.com/) & [php8.1](https://www.php.net/releases/8_1_0.php)-fpm)
   - opens 80 and 443 TCP/UDP ports in firewall 
   - removes [Apache2](https://httpd.apache.org/) if exist
 - Option to install [Node Version Manager](https://github.com/nvm-sh/nvm)
