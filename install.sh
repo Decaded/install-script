@@ -43,6 +43,33 @@ echo "fail2ban config is located in /etc/fail2ban/jail.local"
 echo "#######################################################"
 echo "\n"
 
+echo -n "Do you want to set up SSH key-based authentication? (y/n) "
+read ssh_option
+
+if [ "$ssh_option" != "${ssh_option#[Yy]}" ]; then
+  echo "Please provide your public key below or press 'Ctrl + C' to abort."
+
+  # Read the user-provided public key and save it to a variable
+  read -r user_public_key
+
+  # Create the ~/.ssh directory if it doesn't exist
+  mkdir -p "$HOME/.ssh"
+
+  # Save the public key to the authorized_keys file
+  echo "$user_public_key" >>"$HOME/.ssh/authorized_keys"
+
+  # Enable key-based authentication and disable password-based authentication for SSH
+  sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+
+  # Restart the SSH service for changes to take effect
+  sudo service ssh restart
+
+  echo "SSH key-based authentication has been enabled, and password-based authentication has been disabled."
+else
+  echo "SSH key-based authentication will not be set up."
+fi
+
 echo -n "Install NGINX and PHP? (y/n) "
 read answer
 if [ "$answer" != "${answer#[Yy]}" ]; then
