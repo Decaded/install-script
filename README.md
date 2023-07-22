@@ -14,7 +14,7 @@
 - Option to disable password authentication and leave key-based only (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1))
   - asks for public key that will be inserted into `$HOME/.ssh/authorized_keys`
 
-- Option to install basic web server ([nginx](https://www.nginx.com/) & [php8.1](https://www.php.net/releases/8_1_0.php)-fpm)
+- Option to install basic web server ([nginx](https://www.nginx.com/) & [php8.2](https://www.php.net/releases/8_2_0.php)-fpm)
   - opens 80 and 443 TCP/UDP ports in firewall 
   - removes [Apache2](https://httpd.apache.org/) if exist
 - Option to install [Node Version Manager](https://github.com/nvm-sh/nvm)
@@ -23,19 +23,19 @@
 ### Usage
 Download:
 ```bash
-$ wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
+wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
 ```
 Add permissions to run:
 ```bash
-$ sudo chmod +x install.sh
+sudo chmod +x install.sh
 ```
 Run script:
 ```bash
-$ ./install.sh
+./install.sh
 ```
 You can remove `install.sh` after installation is complete
 ```bash
-$ rm install.sh
+rm install.sh
 ```
 
 ### Disclaimer

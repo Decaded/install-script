@@ -1,7 +1,9 @@
 #!/bin/sh
+# Check if the script has sudo privileges, exit if not
 sudo -n true
 test $? -eq 0 || exit 1 "You need sudo privilege to run this script"
 
+# List of essential apps to be installed
 APPS="htop screen nload nano firewalld fail2ban"
 
 echo "\n"
@@ -11,12 +13,15 @@ echo "Hit Ctrl+C now to abort"
 echo "#######################################################"
 sleep 6
 
+# Update package lists
 echo "Updating package lists"
 sudo apt update # get the latest package lists
 
+# Install essential apps
 sudo apt install $APPS -y       # do the magic
 sudo systemctl enable firewalld # enable firewall on boot
-# download customized fail2ban config
+
+# Download customized fail2ban config
 sudo wget -O /etc/fail2ban/jail.local https://gist.githubusercontent.com/Decaded/4a2b37853afb82ecd91da2971726234a/raw/be9aa897e0fa7ed267b75bd5110c837f7a39000c/jail.local
 sudo service fail2ban restart
 
@@ -28,9 +33,9 @@ echo "## THIS CAN CUT YOU OUT OF THE SERVER ##"
 echo "## CHECK TWICE BEFORE PROCEEDING ##"
 echo "## YOU HAVE BEEN WARNED ##"
 echo "\n"
-echo "Please provide your current SSH port (defalut is 22):"
+echo "Please provide your current SSH port (default is 22):"
 read sshPort
-echo "Openning port $sshPort TCP..."
+echo "Opening port $sshPort TCP..."
 sudo firewall-cmd --permanent --zone=public --add-port=$sshPort/tcp
 echo "Reload configuration..."
 sudo firewall-cmd --reload
@@ -73,11 +78,10 @@ fi
 echo -n "Install NGINX and PHP? (y/n) "
 read answer
 if [ "$answer" != "${answer#[Yy]}" ]; then
-  sudo apt install nginx php8.1 php8.1-fpm -y
+  sudo apt install nginx php8.2 php8.2-fpm -y
 
-  # remove apache2 if exist
-  # why?
-  # because I hate it
+  # Remove apache2 if it exists
+  # Reason: The script author prefers NGINX over Apache
   if [ "$(dpkg -l | awk '/apache2/ {print }' | wc -l)" -ge 1 ]; then
     echo "Apache2 is installed. Removing."
     sudo service apache2 stop
@@ -91,7 +95,7 @@ if [ "$answer" != "${answer#[Yy]}" ]; then
   echo "#######################################################"
   echo "Firewall configuration"
   echo "#######################################################"
-  echo "Oppening ports for 80 and 443 [TCP and UDP]"
+  echo "Opening ports for 80 and 443 [TCP and UDP]"
   echo "80 UDP..."
   sudo firewall-cmd --permanent --zone=public --add-port=80/udp
   echo "80 TCP..."
@@ -104,6 +108,7 @@ if [ "$answer" != "${answer#[Yy]}" ]; then
   sudo firewall-cmd --reload
   echo "\n"
 
+  # Create a directory for SSL certs if it doesn't exist
   if [ -d "/etc/nginx/cert" ]; then
     echo "Directory /etc/nginx/cert exists, skipping."
   else
@@ -112,8 +117,8 @@ if [ "$answer" != "${answer#[Yy]}" ]; then
   fi
 
   echo "\n"
-  echo "Finished setting up default web server."
-  echo "You can upload ssl certificates into /etc/nginx/cert"
+  echo "Finished setting up the default web server."
+  echo "You can upload SSL certificates into /etc/nginx/cert"
   echo "\n"
 
 else
@@ -124,14 +129,15 @@ fi
 echo -n "Install Node Version Manager? (y/n) "
 read answer
 if [ "$answer" != "${answer#[Yy]}" ]; then
+  # Install Node Version Manager (NVM)
   wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
   nvm ls-remote
   echo "\n"
-  echo "Above you can see list of all availble NodeJS versions."
-  echo "Choose NodeJS version to install (eg: 16.19.0):"
+  echo "Above you can see a list of all available NodeJS versions."
+  echo "Choose NodeJS version to install (e.g., 16.19.0):"
   read versionToInstall
   nvm install $versionToInstall
   echo "\n"
