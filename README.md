@@ -11,9 +11,11 @@
     - After installation will open provided SSH port
   - [fail2ban](https://github.com/fail2ban/fail2ban)
 
+
 - Option to disable password authentication and leave key-based only (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1))
   - asks for public key that will be inserted into `$HOME/.ssh/authorized_keys`
-
+- Option to enable passwordless sudo access for user using this script
+  - won't do anything if user already has this enabled
 - Option to install basic web server ([nginx](https://www.nginx.com/) & [php8.2](https://www.php.net/releases/8_2_0.php)-fpm)
   - opens 80 and 443 TCP/UDP ports in firewall 
   - removes [Apache2](https://httpd.apache.org/) if exist
