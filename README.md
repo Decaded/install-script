@@ -1,28 +1,27 @@
-## Script I use to install essential apps on new ubuntu systems
-
+## Script I use to install essential apps on new Ubuntu systems
 
 ### Functions
+
 - Install essentials:
   - [htop](https://htop.dev/)
-  - [screen](https://www.gnu.org/software/screen/) 
-  - [nload](https://github.com/rolandriegel/nload) 
-  - [nano](https://www.nano-editor.org/) 
+  - [screen](https://www.gnu.org/software/screen/)
+  - [nload](https://github.com/rolandriegel/nload)
+  - [nano](https://www.nano-editor.org/)
   - [firewalld](https://firewalld.org/)
     - After installation will open provided SSH port
   - [fail2ban](https://github.com/fail2ban/fail2ban)
 
-
 - Option to disable password authentication and leave key-based only (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1))
-  - asks for public key that will be inserted into `$HOME/.ssh/authorized_keys`
-- Option to enable passwordless sudo access for user using this script
-  - won't do anything if user already has this enabled
-- Option to install basic web server ([nginx](https://www.nginx.com/) & [php8.1](https://www.php.net/releases/8_1_0.php)-fpm)
-  - opens 80 and 443 TCP/UDP ports in firewall 
-  - removes [Apache2](https://httpd.apache.org/) if exist
+  - Asks for a public key that will be inserted into `$HOME/.ssh/authorized_keys`
+- Option to enable passwordless sudo access for the user running this script
+  - Won't do anything if the user already has this enabled
+- Option to install a basic web server ([nginx](https://www.nginx.com/) & [php8.1](https://www.php.net/releases/8_1_0.php)-fpm)
+  - Opens ports 80 and 443 TCP/UDP in the firewall
+  - Removes [Apache2](https://httpd.apache.org/) if it exists
 - Option to install [Node Version Manager](https://github.com/nvm-sh/nvm)
 
-
 ### Usage
+
 Download:
 ```bash
 wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
@@ -33,7 +32,7 @@ sudo chmod +x install.sh
 ```
 Run script:
 ```bash
-./install.sh
+sudo ./install.sh
 ```
 You can remove `install.sh` after installation is complete
 ```bash
