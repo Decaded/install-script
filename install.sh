@@ -2,15 +2,8 @@
 
 # Function to check if the script has sudo privileges
 check_sudo_privileges() {
-  if [[ $EUID -ne 0 ]]; then
-    if sudo -n true; then
-      echo "This script must be run with sudo. Exiting..."
-      exit 1
-    else
-      echo "You need sudo privilege to run this script with ./script.sh. Try running with sudo instead."
-      exit 1
-    fi
-  fi
+  sudo -n true
+  test $? -eq 0 || exit 1 "You need sudo privilege to run this script"
 }
 
 # Function to update package lists and install essential apps
