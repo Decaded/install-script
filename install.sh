@@ -2,7 +2,7 @@
 
 # Function to check if the script has sudo privileges
 check_sudo_privileges() {
-  if sudo -n true; then
+  if [[ $EUID -ne 0 ]]; then
     echo "Sudo privilege verified."
   else
     echo "You need sudo privilege to run this script. Exiting..."
@@ -179,7 +179,7 @@ install_nvm() {
     [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
     nvm ls-remote
     echo "Above you can see a list of all available NodeJS versions."
-    echo "Choose NodeJS version to install (e.g., 16.19.0):"
+    echo "Choose NodeJS version to install (e.g., 18.17.0):"
     read -r versionToInstall
     nvm install "$versionToInstall"
     echo
