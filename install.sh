@@ -3,9 +3,7 @@
 # Function to check if the script has sudo privileges
 check_sudo_privileges() {
   if [[ $EUID -ne 0 ]]; then
-    echo "Sudo privilege verified."
-  else
-    echo "You need sudo privilege to run this script. Exiting..."
+    echo "This script must be run with sudo. Exiting..."
     exit 1
   fi
 }
