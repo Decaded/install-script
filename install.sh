@@ -3,7 +3,10 @@
 # Function to check if the script has sudo privileges
 check_sudo_privileges() {
   sudo -n true
-  test $? -eq 0 || exit 1 "You need sudo privilege to run this script"
+  if [ $? -ne 0 ]; then
+    echo "You need sudo privilege to run this script."
+    exit 1
+  fi
 }
 
 # Function to update package lists and install essential apps
@@ -16,10 +19,18 @@ install_essential_apps() {
 
   echo "Updating package lists"
   sudo apt update
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to update package lists."
+    exit 1
+  fi
 
   local APPS="htop screen nload nano firewalld fail2ban"
   sudo apt install $APPS -y
   sudo systemctl enable firewalld
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to install essential apps or enable firewalld."
+    exit 1
+  fi
 
   echo "Downloading customized fail2ban config"
   sudo wget -O /etc/fail2ban/jail.local https://gist.githubusercontent.com/Decaded/4a2b37853afb82ecd91da2971726234a/raw/be9aa897e0fa7ed267b75bd5110c837f7a39000c/jail.local
@@ -46,8 +57,18 @@ configure_firewall() {
 
   echo "Opening port $sshPort TCP..."
   sudo firewall-cmd --permanent --zone=public --add-port="$sshPort"/tcp
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to open firewall port."
+    exit 1
+  fi
+
   echo "Reload configuration..."
   sudo firewall-cmd --reload
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to reload firewall configuration."
+    exit 1
+  fi
+
   echo "#######################################################"
   echo
 }
@@ -64,20 +85,33 @@ setup_ssh_key_authentication() {
     echo "#######################################################"
 
     # Read the user-provided public key and save it to a variable
-    read -r user_public_key
+    IFS= read -r user_public_key
 
     # Create the ~/.ssh directory if it doesn't exist
     mkdir -p "$HOME/.ssh"
 
     # Save the public key to the authorized_keys file
     echo "$user_public_key" >>"$HOME/.ssh/authorized_keys"
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to save the public key to authorized_keys file."
+      exit 1
+    fi
 
     # Enable key-based authentication and disable password-based authentication for SSH
     sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
     sudo sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to update sshd_config."
+      exit 1
+    fi
 
     # Restart the SSH service for changes to take effect
     sudo service ssh restart
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to restart the SSH service."
+      exit 1
+    fi
 
     echo "#######################################################"
     echo "SSH key-based authentication has been enabled, and password-based authentication has been disabled."
@@ -92,15 +126,22 @@ setup_ssh_key_authentication() {
 
 # Function to enable passwordless sudo access
 enable_passwordless_sudo() {
-  if grep -qE "^\s*$USER\s+ALL=\(ALL\) NOPASSWD:ALL\s*$" /etc/sudoers; then
-    echo "Passwordless sudo access is already enabled for your user."
+  local username="$1"
+
+  if sudo grep -qE "^\s*$username\s+ALL=\(ALL\) NOPASSWD:ALL\s*$" /etc/sudoers; then
+    echo "Passwordless sudo access is already enabled for $username."
   else
-    echo -n "Do you want to enable passwordless sudo access for your user? (y/n): "
+    echo -n "Do you want to enable passwordless sudo access for $username? (y/n): "
     read -r enable_sudo_option
 
     if [[ "$enable_sudo_option" =~ ^[Yy]$ ]]; then
-      echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee -a /etc/sudoers
-      echo "Passwordless sudo access has been enabled for your user."
+      # Append to /etc/sudoers using echo and sudo
+      echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo EDITOR='tee -a' visudo
+      if [ $? -ne 0 ]; then
+        echo "Error: Failed to enable passwordless sudo access."
+        exit 1
+      fi
+      echo "Passwordless sudo access has been enabled for $username."
       echo "Please log out and log back in for the changes to take effect."
     else
       echo "Passwordless sudo access will not be enabled."
@@ -191,7 +232,7 @@ check_sudo_privileges
 install_essential_apps
 configure_firewall
 setup_ssh_key_authentication
-enable_passwordless_sudo
+enable_passwordless_sudo "$USER"
 install_nginx_and_php
 install_nvm
 
