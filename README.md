@@ -23,7 +23,6 @@
   - [git](https://git-scm.com/)
     - After installation prompts for first-time configuration
   - [unattended-upgrades](https://help.ubuntu.com/community/AutomaticSecurityUpdates)
-  - [unzip](https://linux.die.net/man/1/unzip)
 
 - Option to disable password authentication and leave key-based only (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1))
   - Asks for a public key that will be inserted into `$HOME/.ssh/authorized_keys`

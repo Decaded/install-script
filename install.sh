@@ -79,7 +79,6 @@ install_essential_apps() {
     ["6"]="fail2ban - Intrusion prevention system"
     ["7"]="unattended-upgrades - Automatic updates"
     ["8"]="git - Version control system"
-    ["9"]="unzip - Decompression utility"
   )
 
   # Display app options
@@ -112,15 +111,6 @@ install_essential_apps() {
   if [ -n "$selected_apps" ]; then
     echo "Installing selected apps: $selected_apps"
     sudo apt update && sudo apt install $selected_apps -y
-
-    if dpkg -l | awk '/apache2/ {print }' | grep -q .; then
-      echo "Removing Apache2..."
-      sudo service apache2 stop
-      sudo apt remove apache2 -y
-      sudo apt purge apache2 -y
-      sudo apt autoremove -y
-      sudo service nginx start # start nginx after removing apache
-    fi
 
     # Check if firewalld was selected
     if [[ "$selected_apps" == *"firewalld"* ]]; then
