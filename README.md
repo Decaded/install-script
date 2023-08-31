@@ -9,20 +9,20 @@
 ### Functions
 
 - Install essentials:
-  - [htop](https://htop.dev/)
-  - [screen](https://www.gnu.org/software/screen/)
-  - [nload](https://github.com/rolandriegel/nload)
-  - [nano](https://www.nano-editor.org/)
-  - [firewalld](https://firewalld.org/)
+  - [htop](https://htop.dev/) - Interactive process viewer
+  - [screen](https://www.gnu.org/software/screen/) - Terminal multiplexer
+  - [nload](https://github.com/rolandriegel/nload) - Network traffic monitor
+  - [nano](https://www.nano-editor.org/) - Text editor
+  - [firewalld](https://firewalld.org/) - Firewall management
     - After installation will open provided SSH port
-  - [fail2ban](https://github.com/fail2ban/fail2ban)
+  - [fail2ban](https://github.com/fail2ban/fail2ban) - Intrusion prevention system
     - After installation will ask for configuration file;
       - default one
       - custom one (downloadable via url)
       - [modified by me](https://gist.github.com/Decaded/4a2b37853afb82ecd91da2971726234a)
-  - [git](https://git-scm.com/)
+  - [git](https://git-scm.com/) - Version control system
     - After installation prompts for first-time configuration
-  - [unattended-upgrades](https://help.ubuntu.com/community/AutomaticSecurityUpdates)
+  - [unattended-upgrades](https://help.ubuntu.com/community/AutomaticSecurityUpdates) - Automatic updates
 
 - Option to disable password authentication and leave key-based only (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1))
   - Asks for a public key that will be inserted into `$HOME/.ssh/authorized_keys`
