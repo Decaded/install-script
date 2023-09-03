@@ -77,7 +77,9 @@ cooler, more secure, and tuned to your liking.
 
 And then, just pick the goodies you want from our cool menu:
 
-![Script in Action](images/main_menu.png)
+<div align="center">
+  <img src="images/main_menu.png" alt="Script in Action">
+</div>
 
 ---
 
