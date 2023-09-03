@@ -1,67 +1,96 @@
-## Script I use to configure new Ubuntu systems
+# Handy Ubuntu System Setup Script
 
 [![Code Size](https://img.shields.io/github/languages/code-size/Decaded/install-script)](https://github.com/Decaded/install-script)
 [![Open Issues](https://img.shields.io/github/issues/Decaded/install-script)](https://github.com/Decaded/install-script/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/Decaded/install-script)](https://github.com/Decaded/install-script/pulls)
 [![Last Commit](https://img.shields.io/github/last-commit/Decaded/install-script)](https://github.com/Decaded/install-script/commits)
 
+Welcome to this nifty Ubuntu System Setup Script! This script is your go-to tool for setting up and supercharging your Ubuntu system in a jiffy. It's all about making your system
+cooler, more secure, and tuned to your liking.
 
-### Functions
+---
 
-- Install essentials:
-  - [htop](https://htop.dev/) - Interactive process viewer
-  - [screen](https://www.gnu.org/software/screen/) - Terminal multiplexer
-  - [nload](https://github.com/rolandriegel/nload) - Network traffic monitor
-  - [nano](https://www.nano-editor.org/) - Text editor
-  - [firewalld](https://firewalld.org/) - Firewall management
-    - After installation will open provided SSH port
-  - [fail2ban](https://github.com/fail2ban/fail2ban) - Intrusion prevention system
-    - After installation will ask for configuration file;
-      - default one
-      - custom one (downloadable via url)
-      - [modified by me](https://gist.github.com/Decaded/4a2b37853afb82ecd91da2971726234a)
-  - [git](https://git-scm.com/) - Version control system
-    - After installation prompts for first-time configuration
-  - [unattended-upgrades](https://help.ubuntu.com/community/AutomaticSecurityUpdates) - Automatic updates
+## Cool Stuff You Can Do
 
-- Option to disable password authentication and leave key-based only (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1))
-  - Asks for a public key that will be inserted into `$HOME/.ssh/authorized_keys`
-    - if the key already exist in the file, new entry will not be made
-  - `sshd_config` will be backed up to `/etc/ssh/sshd_config_decoscript.backup`
-    - this will enable option `6` in the menu: `Restore SSH Configuration`
-- Option to enable passwordless sudo access for the user running this script
-  - Won't do anything if the user already has this enabled
-- Option to install a basic web server ([nginx](https://www.nginx.com/) & [php8.1](https://www.php.net/releases/8_1_0.php)-fpm)
-  - Opens ports 80 and 443 TCP/UDP in the firewall
-  - Removes [Apache2](https://httpd.apache.org/) if it exists
-- Option to install [Node Version Manager](https://github.com/nvm-sh/nvm)
+### Get Must-Have Tools
 
-___
-### Usage
+1. **[htop](https://htop.dev/)** - Check out what's going on with your system processes in a flash.
+2. **[screen](https://www.gnu.org/software/screen/)** - Split your terminal like a pro.
+3. **[nload](https://github.com/rolandriegel/nload)** - Keep an eye on your network traffic.
+4. **[nano](https://www.nano-editor.org/)** - A simple and friendly text editor.
+5. **[firewalld](https://firewalld.org/)** - Manage your firewall settings with ease:
+   - Automatically opens your SSH port (with options for customization).
+6. **[fail2ban](https://github.com/fail2ban/fail2ban)** - Ward off intruders with this handy tool:
+   - Configure it with default settings or go custom.
+7. **[git](https://git-scm.com/)** - The go-to tool for version control:
+   - We'll help you set it up if it's your first time.
+8. **[unattended-upgrades](https://help.ubuntu.com/community/AutomaticSecurityUpdates)** - Stay safe with automatic security updates.
 
-Download:
-```bash
-wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
-```
-Add permissions to run:
-```bash
-sudo chmod +x install.sh
-```
-Run script:
-```bash
-./install.sh
-```
-And just pick what you need from the menu:
+### Customize Your Setup
+
+- **SSH Authentication**:
+
+  - Switch to key-based authentication for enhanced security (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1)).
+  - You can later revert to password authentication using option `6` in the menu: `Restore SSH Configuration`.
+  - The script automatically creates a backup of your SSH configuration (`sshd_config`) before making changes, located at `/etc/ssh/sshd_config_decoscript.backup`.
+
+- **Passwordless Sudo Access**:
+
+  - Elevate your powers without the hassle of password prompts.
+  - Don't worry; we won't mess with it if you're already in the passwordless sudo club.
+
+### Web Server Delight
+
+- Want to host a website? We've got you covered with [Nginx](https://www.nginx.com/) & [PHP 8.1 (php-fpm)](https://www.php.net/releases/8_1_0.php).
+- We'll even open up ports 80 and 443 TCP/UDP in the firewall (if you have `firewalld` installed).
+- And if you're still hanging out with [Apache2](https://httpd.apache.org/), we'll give it a polite send-off.
+
+### Node.js Goodness
+
+- Ready to explore the world of Node.js? We've got you covered with [Node Version Manager (NVM)](https://github.com/nvm-sh/nvm).
+- With NVM, you can:
+  - Seamlessly switch between different Node.js versions.
+  - Easily manage Node.js installations.
+  - Keep your Node.js environment up-to-date with the latest releases.
+
+---
+
+## How to Make Magic Happen
+
+1. **Download** this _awesome_ script
+
+   ```bash
+   wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
+   ```
+
+2. **Give it Permission to Run**:
+
+   ```bash
+   sudo chmod +x install.sh
+   ```
+
+3. **Run the Script**:
+
+   ```bash
+   ./install.sh
+   ```
+
+And then, just pick the goodies you want from our cool menu:
 
 ![Script in Action](images/main_menu.png)
 
-___
-### Contributing
-Contributions are welcome! If you find any issues or have suggestions for improvements, feel free to submit a [issue](https://github.com/Decaded/install-script/issues).
+---
 
-___
-### Disclaimer
+## Join the Fun
 
-> I am by no means an expert in this field. You use this script at your own risk.
+We're all ears! If you spot something funky or have ideas for making this script even cooler, share it with us via [issues](https://github.com/Decaded/install-script/issues).
 
-___
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Quick Word of Caution
+
+> This script comes as is, without any guarantees. It's your adventure, so be mindful. The author isn't a super-tech guru, so use it with a touch of caution.
