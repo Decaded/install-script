@@ -573,26 +573,26 @@ configure_static_ip() {
     return
   fi
 
-  # Prompt the user for IP address, subnet mask, gateway, and DNS servers
+  # Prompt the user for IP address, net mask, gateway, and DNS servers
   read -rp "Enter the static IP address (e.g., 192.168.1.100): " static_ip_address
-  read -rp "Enter the subnet mask (e.g., 255.255.255.0): " subnet_mask
+  read -rp "Enter the net mask (e.g., 20): " net_mask
   read -rp "Enter the gateway (e.g., 192.168.1.1): " gateway
   read -rp "Enter DNS server 1 (e.g., 8.8.8.8): " dns_server_1
   read -rp "Enter DNS server 2 (optional, press Enter to skip): " dns_server_2
 
   # Check if any of the mandatory fields are empty
-  if [ -z "$static_ip_address" ] || [ -z "$subnet_mask" ] || [ -z "$gateway" ] || [ -z "$dns_server_1" ]; then
+  if [ -z "$static_ip_address" ] || [ -z "$net_mask" ] || [ -z "$gateway" ] || [ -z "$dns_server_1" ]; then
     echo "Error: All mandatory fields must be filled. Aborting static IP configuration."
     return
   fi
 
   # Create a Netplan configuration file for the static IP address
-  cat <<EOL | sudo tee "/etc/netplan/99-static-ip.yaml" >/dev/null
+  cat <<EOL | sudo tee "/etc/netplan/01-network-manager-all.yaml" >/dev/null
 network:
   version: 2
   ethernets:
     $selected_device:
-      addresses: [$static_ip_address/$subnet_mask]
+      addresses: [$static_ip_address/$net_mask]
       gateway4: $gateway
       nameservers:
         addresses: [$dns_server_1${dns_server_2:+, $dns_server_2}]
