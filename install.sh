@@ -16,6 +16,7 @@ show_menu() {
   else
     echo "6) Restore SSH Configuration (Not available)"
   fi
+  echo "7) Configure Static IP Address"
   echo
   echo "0) Exit"
   echo
@@ -26,6 +27,7 @@ show_menu() {
   3) install_nvm ;;
   4) enable_passwordless_sudo "$USER" ;;
   5) setup_ssh_key_authentication ;;
+  7) configure_static_ip ;;
   6)
     if [ -f "/etc/ssh/sshd_config_decoscript.backup" ]; then
       restore_ssh_config
@@ -64,51 +66,47 @@ check_sudo_privileges() {
   fi
 }
 
-# Function to install essential apps
+# Function to install essential apps using dialog
 install_essential_apps() {
   clear
-  echo "Choose which essential apps to install:"
 
-  # Array of app options
-  declare -A app_options=(
-    ["1"]="htop - Interactive process viewer"
-    ["2"]="screen - Terminal multiplexer"
-    ["3"]="nload - Network traffic monitor"
-    ["4"]="nano - Text editor"
-    ["5"]="firewalld - Firewall management"
-    ["6"]="fail2ban - Intrusion prevention system"
-    ["7"]="unattended-upgrades - Automatic updates"
-    ["8"]="git - Version control system"
-  )
+  while true; do
+    # Define the dialog menu options
+    options=("1" "htop - Interactive process viewer" off
+      "2" "screen - Terminal multiplexer" off
+      "3" "nload - Network traffic monitor" off
+      "4" "nano - Text editor" off
+      "5" "firewalld - Firewall management" off
+      "6" "fail2ban - Intrusion prevention system" off
+      "7" "unattended-upgrades - Automatic updates" off
+      "8" "git - Version control system" off)
 
-  # Display app options
-  for app in "${!app_options[@]}"; do
-    echo "$app) ${app_options[$app]}"
-  done
+    # Display the dialog menu and store the user's choices
+    choices=$(dialog --clear --title "Select Essential Apps" --checklist "Choose which essential apps to install:" 0 0 0 "${options[@]}" 2>&1 >/dev/tty)
 
-  echo "0) Exit"
+    # Check if the user canceled or made no selection
+    if [ $? -ne 0 ]; then
+      clear
+      echo "Canceled. Returning to the main menu."
+      return
+    fi
 
-  # Read user choices
-  read -rp "Enter the numbers of the apps to install (e.g., 1 3 5): " choices
+    # Process user choices and install selected apps
+    selected_apps=""
 
-  # Convert choices to an array
-  choices_array=($choices)
+    for choice in $choices; do
+      case $choice in
+      1) selected_apps+=" htop" ;;
+      2) selected_apps+=" screen" ;;
+      3) selected_apps+=" nload" ;;
+      4) selected_apps+=" nano" ;;
+      5) selected_apps+=" firewalld" ;;
+      6) selected_apps+=" fail2ban" ;;
+      7) selected_apps+=" unattended-upgrades" ;;
+      8) selected_apps+=" git" ;;
+      esac
+    done
 
-  # Process user choices and install selected apps
-  selected_apps=""
-  for choice in "${choices_array[@]}"; do
-    case $choice in
-    0) return ;; # Exit
-    [1-9])
-      selected_apps+=" ${app_options[$choice]%% -*}" # Extract app name
-      ;;
-    *)
-      echo "Invalid choice: $choice"
-      ;;
-    esac
-  done
-
-  if [ -n "$selected_apps" ]; then
     echo "Installing selected apps: $selected_apps"
     sudo apt update && sudo apt install $selected_apps -y
 
@@ -137,15 +135,22 @@ install_essential_apps() {
     if [[ "$selected_apps" == *"git"* ]]; then
       configure_git
     fi
-    echo
-  else
-    echo "No apps selected."
-  fi
+
+    echo "Installation complete."
+  done
 }
 
-# Function to configure the firewall
+# Function to configure the firewall with checks
 configure_firewall() {
   clear
+
+  # Check if firewalld is installed
+  if ! command -v firewall-cmd &>/dev/null; then
+    echo "Firewalld is not installed. Please install it before configuring firewall rules."
+    return
+  fi
+
+  # Enable firewalld
   sudo systemctl enable firewalld
 
   echo "#######################################################"
@@ -157,6 +162,12 @@ configure_firewall() {
   echo "#######################################################"
 
   read -rp "Please provide your current SSH port (default is 22): " sshPort
+
+  # Check if the SSH port is already open
+  if sudo firewall-cmd --list-ports | grep -q "$sshPort/tcp"; then
+    echo "Port $sshPort [TCP] is already open. Skipping."
+    return
+  fi
 
   validate_port "$sshPort"
   if [ $? -ne 0 ]; then
@@ -182,8 +193,25 @@ configure_firewall() {
 }
 
 # Function to set up SSH key-based authentication
-# Function to set up SSH key-based authentication
 setup_ssh_key_authentication() {
+  clear
+
+  # Check if SSH service is installed
+  if ! dpkg -l | grep -q "openssh-server"; then
+    echo "SSH service (openssh-server) is not installed."
+
+    # Ask the user if they want to install SSH service
+    read -rp "Do you want to install SSH service? (Y/n): " install_ssh_service
+
+    if [[ "$install_ssh_service" =~ ^[Yy]$ || "$install_ssh_service" == "" ]]; then
+      sudo apt update
+      sudo apt install openssh-server -y
+    else
+      echo "SSH service will not be installed. Returning to the main menu."
+      return
+    fi
+  fi
+
   clear
   # Create a backup of the sshd_config file
   sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config_decoscript.backup
@@ -274,12 +302,31 @@ enable_passwordless_sudo() {
   echo
 }
 
-# Function to install NGINX and PHP
+# Function to install NGINX and PHP with firewall checks
 install_nginx_and_php() {
   clear
 
-  # Install NGINX and PHP
-  sudo apt install nginx php8.1 php8.1-fpm -y
+  # Check if firewalld is installed
+  if ! command -v firewall-cmd &>/dev/null; then
+    echo "Firewalld is not installed. Please install it before configuring firewall rules."
+    return
+  fi
+
+  # Check if NGINX is already installed
+  if dpkg -l | grep -q "nginx"; then
+    echo "NGINX is already installed. Skipping NGINX installation."
+  else
+    # Install NGINX
+    sudo apt install nginx -y
+  fi
+
+  # Check if PHP is already installed
+  if dpkg -l | grep -q "php8.1"; then
+    echo "PHP is already installed. Skipping PHP installation."
+  else
+    # Install PHP
+    sudo apt install php8.1 php8.1-fpm -y
+  fi
 
   # Remove apache2 if it exists
   if dpkg -l | awk '/apache2/ {print }' | grep -q .; then
@@ -294,15 +341,23 @@ install_nginx_and_php() {
   echo "#######################################################"
   echo "Firewall configuration"
   echo "#######################################################"
-  echo "Opening ports for 80 and 443 [TCP and UDP]"
-  echo "80 UDP..."
-  sudo firewall-cmd --permanent --zone=public --add-port=80/udp
-  echo "80 TCP..."
-  sudo firewall-cmd --permanent --zone=public --add-port=80/tcp
-  echo "443 UDP..."
-  sudo firewall-cmd --permanent --zone=public --add-port=443/udp
-  echo "443 TCP..."
-  sudo firewall-cmd --permanent --zone=public --add-port=443/tcp
+
+  # Check if port 80 is open
+  if ! sudo firewall-cmd --list-ports | grep -q "80/tcp"; then
+    echo "Opening port 80 [TCP]..."
+    sudo firewall-cmd --permanent --zone=public --add-port=80/tcp
+  else
+    echo "Port 80 [TCP] is already open. Skipping."
+  fi
+
+  # Check if port 443 is open
+  if ! sudo firewall-cmd --list-ports | grep -q "443/tcp"; then
+    echo "Opening port 443 [TCP]..."
+    sudo firewall-cmd --permanent --zone=public --add-port=443/tcp
+  else
+    echo "Port 443 [TCP] is already open. Skipping."
+  fi
+
   echo "Reload configuration..."
   sudo firewall-cmd --reload
   echo
@@ -376,20 +431,66 @@ validate_port() {
 
 # Function to configure Git
 configure_git() {
-  clear
-  echo "Git Configuration"
+  while true; do
+    clear
+    echo "Git Configuration"
 
+    # Check if there is already a defined Git user
+    current_git_name=$(git config --global user.name)
+
+    if [ -n "$current_git_name" ]; then
+      echo "Git user '$current_git_name' is already defined."
+      read -rp "Do you want to change the Git user configuration? (y/N): " git_change_config
+
+      case "$git_change_config" in
+      [yY])
+        configure_git_user
+        ;;
+      *)
+        echo "Skipping Git configuration."
+        break
+        ;;
+      esac
+    else
+      configure_git_user
+    fi
+
+    # Ask the user to confirm the changes
+    read -rp "Are these changes correct? (y/N): " confirm_changes
+
+    case "$confirm_changes" in
+    [yY])
+      echo
+      echo "Remember, You can always check your configuration by running 'git config --list' in the console."
+      echo
+      break
+      ;;
+    *)
+      echo "Reconfiguring Git..."
+      ;;
+    esac
+  done
+}
+
+# Function to configure Git user
+configure_git_user() {
+  clear
+  echo "Git User Configuration"
   read -rp "Enter your Git name: " git_name
   read -rp "Enter your Git email: " git_email
+  read -rp "Enter the default Git branch (default is 'master'): " git_default_branch
+
+  # Set default branch to 'master' if input is empty
+  git_default_branch=${git_default_branch:-"master"}
 
   # Set Git configurations
   git config --global user.name "$git_name"
   git config --global user.email "$git_email"
+  git config --global init.defaultBranch "$git_default_branch"
 
-  echo "Git has been configured with name: $git_name and email: $git_email:"
-  echo "You can always check your configuration by running 'git config --list':"
-  git config --list
+  # Display the changes
   echo
+  echo "Git has been configured with name: $git_name, email: $git_email, and default branch: $git_default_branch."
 }
 
 # Function to configure fail2ban
@@ -398,30 +499,82 @@ configure_fail2ban() {
   echo "Choose the Fail2ban configuration to use:"
   echo "1) Default configuration"
   echo "2) User custom configuration (provide link)"
-  echo "3) Custom configuration modified by the script author (recommended)"
 
   # Read user input
-  read -rp "Enter your choice (1/2/3): " fail2ban_config_choice
+  read -rp "Enter your choice (1/2): " fail2ban_config_choice
 
   case $fail2ban_config_choice in
-  1) ;;
+  1)
+    echo "Installing Fail2ban with default configuration..."
+    # Install Fail2ban
+    sudo apt install fail2ban -y
+    ;;
   2)
     read -rp "Enter the URL of the user custom configuration: " custom_config_url
 
-    sudo wget -O /etc/fail2ban/jail.local "$custom_config_url"
-    ;;
-  3)
-    echo "Downloading customized fail2ban config..."
-    sudo wget -O /etc/fail2ban/jail.local https://gist.githubusercontent.com/Decaded/4a2b37853afb82ecd91da2971726234a/raw/be9aa897e0fa7ed267b75bd5110c837f7a39000c/jail.local
+    # Check if the URL is valid and accessible
+    if wget --spider "$custom_config_url" 2>/dev/null; then
+      # Install Fail2ban if not already installed
+      sudo apt install fail2ban -y
+      sudo wget -O /etc/fail2ban/jail.local "$custom_config_url"
+      echo "User custom Fail2ban configuration applied."
+    else
+      echo "Warning: Invalid URL or unable to reach the URL. Using the default configuration."
+      # Install Fail2ban with the default configuration
+      sudo apt install fail2ban -y
+    fi
     ;;
   *)
-    echo "Invalid choice. Using the custom configuration modified by the script author."
-    sudo wget -O /etc/fail2ban/jail.local https://gist.githubusercontent.com/Decaded/4a2b37853afb82ecd91da2971726234a/raw/be9aa897e0fa7ed267b75bd5110c837f7a39000c/jail.local
+    echo "Invalid choice. Using the default configuration."
     ;;
   esac
 
-  echo "Selected essential apps installed successfully."
-  echo "fail2ban config is located in /etc/fail2ban/jail.local"
+  echo "Fail2ban configuration completed."
+}
+
+# Function to configure a static IP address
+configure_static_ip() {
+  clear
+  echo "Configuring a static IP address."
+
+  # Prompt the user for IP address, subnet mask, gateway, and DNS servers
+  read -rp "Enter the static IP address: " static_ip_address
+  read -rp "Enter the subnet mask: " subnet_mask
+  read -rp "Enter the gateway: " gateway
+  read -rp "Enter DNS server 1: " dns_server_1
+  read -rp "Enter DNS server 2 (optional, press Enter to skip): " dns_server_2
+
+  # Display a summary of the configuration
+  echo "Summary:"
+  echo "Static IP address: $static_ip_address"
+  echo "Subnet mask: $subnet_mask"
+  echo "Gateway: $gateway"
+  echo "DNS server 1: $dns_server_1"
+  if [ -n "$dns_server_2" ]; then
+    echo "DNS server 2: $dns_server_2"
+  fi
+
+  # Ask for confirmation
+  read -rp "Confirm configuration (y/n): " confirmation
+  if [ "$confirmation" != "y" ]; then
+    echo "Configuration canceled. No changes were made."
+    return
+  fi
+
+  # Create a configuration file for the static IP address
+  cat <<EOL | sudo tee /etc/network/interfaces.d/static-ip.cfg >/dev/null
+auto eth0
+iface eth0 inet static
+  address $static_ip_address
+  netmask $subnet_mask
+  gateway $gateway
+  dns-nameservers $dns_server_1 $dns_server_2
+EOL
+
+  # Restart the networking service to apply the changes
+  sudo systemctl restart networking
+
+  echo "Static IP address configuration completed."
 }
 
 # Main script
