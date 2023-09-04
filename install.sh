@@ -548,6 +548,17 @@ configure_static_ip() {
     fi
   fi
 
+  # Check if ifconfig is available, and if not, prompt the user to install it
+  if ! command -v ifconfig &>/dev/null; then
+    read -rp "ifconfig is not installed. Do you want to install it? (Y/n): " install_ifconfig
+    if [[ "$install_ifconfig" =~ ^[Yy]$ ]]; then
+      sudo apt install net-tools -y
+    else
+      echo "ifconfig is required to list network devices. Exiting."
+      exit 1
+    fi
+  fi
+
   # Get network device information from 'ifconfig -a'
   device_info=$(ifconfig -a)
 
