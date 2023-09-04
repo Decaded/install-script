@@ -548,36 +548,20 @@ configure_static_ip() {
     fi
   fi
 
-  # Get a list of available network devices and their types
-  network_device_info=($(ip -o link show | awk -F': ' '{print $2 " " $3}'))
+  # Get network device information from 'ifconfig -a'
+  device_info=$(ifconfig -a)
 
-  # Filter devices to include only Ethernet and Wi-Fi
-  selected_devices=()
-  for info in "${network_device_info[@]}"; do
-    device_name=$(echo "$info" | awk '{print $1}')
-    device_type=$(echo "$info" | awk '{print $2}')
-    if [[ "$device_type" == "ether" || "$device_type" == "wlan" ]]; then
-      selected_devices+=("$device_name")
-    fi
-  done
+  # Display available network devices
+  echo "Available network devices:"
+  echo "$device_info"
 
-  # Check if there are multiple network devices and let the user choose
-  if [ ${#selected_devices[@]} -eq 1 ]; then
-    selected_device=${selected_devices[0]}
-  else
-    echo "Select the network device for the static IP configuration:"
-    for ((i = 0; i < ${#selected_devices[@]}; i++)); do
-      echo "$i) ${selected_devices[i]}"
-    done
-    read -rp "Enter the number corresponding to your choice: " device_choice
+  # Prompt the user to enter the desired network device
+  read -rp "Enter the network device name (e.g., enp5s0): " selected_device
 
-    # Validate the user's choice
-    if [[ "$device_choice" =~ ^[0-9]+$ ]] && [ "$device_choice" -ge 0 ] && [ "$device_choice" -lt ${#selected_devices[@]} ]; then
-      selected_device=${selected_devices[device_choice]}
-    else
-      echo "Invalid choice. Aborting static IP configuration."
-      return
-    fi
+  # Check if the selected device exists in the device information
+  if ! echo "$device_info" | grep -q "$selected_device:"; then
+    echo "Error: The selected network device '$selected_device' does not exist. Please enter a valid device name."
+    return
   fi
 
   # Prompt the user for IP address, subnet mask, gateway, and DNS servers
