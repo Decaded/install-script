@@ -549,15 +549,15 @@ configure_static_ip() {
   fi
 
   # Get a list of available network devices and their types
-  network_devices=($(ip -o link show | awk -F': ' '{print $2}'))
-  network_device_types=($(ip -o link show | awk -F': ' '{print $2" " $3}'))
+  network_device_info=($(ip -o link show | awk -F': ' '{print $2 " " $3}'))
 
   # Filter devices to include only Ethernet and Wi-Fi
   selected_devices=()
-  for ((i = 0; i < ${#network_devices[@]}; i++)); do
-    device_type="${network_device_types[i]}"
+  for info in "${network_device_info[@]}"; do
+    device_name=$(echo "$info" | awk '{print $1}')
+    device_type=$(echo "$info" | awk '{print $2}')
     if [[ "$device_type" == "ether" || "$device_type" == "wlan" ]]; then
-      selected_devices+=("${network_devices[i]}")
+      selected_devices+=("$device_name")
     fi
   done
 
