@@ -532,49 +532,73 @@ configure_fail2ban() {
   echo "Fail2ban configuration completed."
 }
 
-# Function to configure a static IP address
+# Function to configure a static IP address using Netplan
 configure_static_ip() {
   clear
-  echo "Configuring a static IP address."
+  echo "Configuring a static IP address using Netplan."
 
-  # Prompt the user for IP address, subnet mask, gateway, and DNS servers
-  read -rp "Enter the static IP address: " static_ip_address
-  read -rp "Enter the subnet mask: " subnet_mask
-  read -rp "Enter the gateway: " gateway
-  read -rp "Enter DNS server 1: " dns_server_1
-  read -rp "Enter DNS server 2 (optional, press Enter to skip): " dns_server_2
-
-  # Display a summary of the configuration
-  echo "Summary:"
-  echo "Static IP address: $static_ip_address"
-  echo "Subnet mask: $subnet_mask"
-  echo "Gateway: $gateway"
-  echo "DNS server 1: $dns_server_1"
-  if [ -n "$dns_server_2" ]; then
-    echo "DNS server 2: $dns_server_2"
+  # Check if Netplan is installed, and if not, prompt the user to install it
+  if ! command -v netplan &>/dev/null; then
+    read -rp "Netplan is not installed. Do you want to install it? (Y/n): " install_netplan
+    if [[ "$install_netplan" =~ ^[Yy]$ ]]; then
+      sudo apt install netplan -y
+    else
+      echo "Netplan is required to configure the static IP address using this script. Exiting."
+      exit 1
+    fi
   fi
 
-  # Ask for confirmation
-  read -rp "Confirm configuration (y/n): " confirmation
-  if [ "$confirmation" != "y" ]; then
-    echo "Configuration canceled. No changes were made."
+  # Get a list of available network devices
+  network_devices=($(ip -o link show | awk -F': ' '{print $2}'))
+
+  # Check if there are multiple network devices and let the user choose
+  if [ ${#network_devices[@]} -eq 1 ]; then
+    selected_device=${network_devices[0]}
+  else
+    echo "Select the network device for the static IP configuration:"
+    for ((i = 0; i < ${#network_devices[@]}; i++)); do
+      echo "$i) ${network_devices[i]}"
+    done
+    read -rp "Enter the number corresponding to your choice: " device_choice
+
+    # Validate the user's choice
+    if [[ "$device_choice" =~ ^[0-9]+$ ]] && [ "$device_choice" -ge 0 ] && [ "$device_choice" -lt ${#network_devices[@]} ]; then
+      selected_device=${network_devices[device_choice]}
+    else
+      echo "Invalid choice. Aborting static IP configuration."
+      return
+    fi
+  fi
+
+  # Prompt the user for IP address, subnet mask, gateway, and DNS servers
+  read -rp "Enter the static IP address (e.g., 192.168.1.100): " static_ip_address
+  read -rp "Enter the subnet mask (e.g., 255.255.255.0): " subnet_mask
+  read -rp "Enter the gateway (e.g., 192.168.1.1): " gateway
+  read -rp "Enter DNS server 1 (e.g., 8.8.8.8): " dns_server_1
+  read -rp "Enter DNS server 2 (optional, press Enter to skip): " dns_server_2
+
+  # Check if any of the mandatory fields are empty
+  if [ -z "$static_ip_address" ] || [ -z "$subnet_mask" ] || [ -z "$gateway" ] || [ -z "$dns_server_1" ]; then
+    echo "Error: All mandatory fields must be filled. Aborting static IP configuration."
     return
   fi
 
-  # Create a configuration file for the static IP address
-  cat <<EOL | sudo tee /etc/network/interfaces.d/static-ip.cfg >/dev/null
-auto eth0
-iface eth0 inet static
-  address $static_ip_address
-  netmask $subnet_mask
-  gateway $gateway
-  dns-nameservers $dns_server_1 $dns_server_2
+  # Create a Netplan configuration file for the static IP address
+  cat <<EOL | sudo tee "/etc/netplan/99-static-ip.yaml" >/dev/null
+network:
+  version: 2
+  ethernets:
+    $selected_device:
+      addresses: [$static_ip_address/$subnet_mask]
+      gateway4: $gateway
+      nameservers:
+        addresses: [$dns_server_1${dns_server_2:+, $dns_server_2}]
 EOL
 
-  # Restart the networking service to apply the changes
-  sudo systemctl restart networking
+  # Apply the Netplan configuration
+  sudo netplan apply
 
-  echo "Static IP address configuration completed."
+  echo "Static IP address configuration completed for $selected_device."
 }
 
 # Main script
