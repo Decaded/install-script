@@ -53,6 +53,13 @@ cooler, more secure, and tuned to your liking.
   - Easily manage Node.js installations.
   - Keep your Node.js environment up-to-date with the latest releases.
 
+### Configure Static IP Address (New!)
+
+- Set a static IP address for your system with ease.
+- Specify the IP address, subnet mask, gateway, and DNS servers.
+- Enjoy a stable network configuration.
+- As requested in [issue #4](https://github.com/Decaded/install-script/issues/4).
+
 ---
 
 ## How to Make Magic Happen
