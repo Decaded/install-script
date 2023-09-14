@@ -3,7 +3,7 @@
 # Server Configuration Script
 # This script provides a menu-driven interface to perform various server configuration tasks.
 # It allows users to install essential apps, set up NGINX and PHP, configure NVM, enable passwordless sudo,
-# set up SSH key-based authentication and configure static IP address.
+# set up SSH key-based authentication and more.
 
 # Author: Decaded (https://github.com/decaded)
 
