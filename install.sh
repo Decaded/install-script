@@ -137,6 +137,7 @@ install_essential_apps() {
     fi
 
     echo "Installation complete."
+    return
   done
 }
 
