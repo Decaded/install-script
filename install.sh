@@ -182,7 +182,6 @@ configure_firewall() {
 }
 
 # Function to set up SSH key-based authentication
-# Function to set up SSH key-based authentication
 setup_ssh_key_authentication() {
   clear
   # Create a backup of the sshd_config file
