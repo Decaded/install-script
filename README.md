@@ -8,17 +8,6 @@
 Welcome to this nifty Ubuntu System Setup Script! This script is your go-to tool for setting up and supercharging your Ubuntu system in a jiffy. It's all about making your system
 cooler, more secure, and tuned to your liking.
 
----
-
-## ⚠️ Warning: Early Development Stage ⚠️
-
-This version is currently in the early stages of development, and major changes or updates may occur frequently. Please be aware of the following:
-
-- This version is not yet considered stable and may contain bugs.
-- Features and functionality may change without notice.
-- Documentation may be incomplete or outdated.
-- **It can break your system** or just refuse to run at all.
----
 ## Cool Stuff You Can Do
 
 ### Get Must-Have Tools
