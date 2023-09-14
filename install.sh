@@ -563,13 +563,10 @@ configure_static_ip() {
     sudo apt update && sudo apt install netplan -y
   fi
 
-  # Prompt installation of ifconfig
-  read -rp "'ifconfig' (net-tools) package is required to proceed. Do you want to install it? (Y/n): " install_ifconfig
-  if [[ "$install_ifconfig" =~ ^[Yy]$ ]]; then
-    sudo apt install net-tools -y
-  else
-    echo "'ifconfig' (net-tools) is required to list network devices. Exiting."
-    exit 1
+  # Check if ifconfig is installed, and if not, install it
+  if ! [ -x "$(command -v ifconfig)" ]; then
+    echo "Ifconfig (net-tools) is not installed. Installing..."
+    sudo apt update && sudo apt install net-tools -y
   fi
 
   # Get network device information from 'ifconfig -a'
