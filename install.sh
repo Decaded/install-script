@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Server Configuration Script
+# This script provides a menu-driven interface to perform various server configuration tasks.
+# It allows users to install essential apps, set up NGINX and PHP, configure NVM, enable passwordless sudo,
+# set up SSH key-based authentication and configure static IP address.
+
+# Author: Decaded (https://github.com/decaded)
+
 # Function to display a menu and get user's choice
 show_menu() {
   clear
@@ -11,13 +18,13 @@ show_menu() {
   echo "3) Install Node Version Manager (NVM)"
   echo "4) Enable Passwordless sudo access"
   echo "5) Set up SSH key-based authentication"
-  if [ -f "/etc/ssh/sshd_config_decoscript.backup" ]; then
-    echo "6) Restore SSH Configuration"
-  else
-    echo "6) Restore SSH Configuration (Not available)"
-  fi
-  echo "7) Configure Static IP Address"
+  echo "6) Configure Static IP Address"
   echo
+
+  if [ -f "/etc/ssh/sshd_config_decoscript.backup" ]; then
+    echo "9) Restore SSH Configuration"
+  fi
+
   echo "0) Exit"
   echo
   read -rp "Enter your choice: " choice
@@ -27,12 +34,13 @@ show_menu() {
   3) install_nvm ;;
   4) enable_passwordless_sudo "$USER" ;;
   5) setup_ssh_key_authentication ;;
-  7) configure_static_ip ;;
-  6)
+  6) configure_static_ip ;;
+  9)
     if [ -f "/etc/ssh/sshd_config_decoscript.backup" ]; then
       restore_ssh_config
     else
-      echo "SSH configuration backup is not available for restoration."
+      echo "Invalid choice. Please select a valid option."
+      show_menu
     fi
     ;;
   0)
@@ -74,77 +82,86 @@ install_essential_apps() {
   if ! [ -x "$(command -v dialog)" ]; then
     echo "Dialog is not installed. Installing dialog..."
     sudo apt update && sudo apt install dialog -y
-  fi
 
-  while true; do
-    # Define the dialog menu options
-    options=("1" "htop - Interactive process viewer" off
-      "2" "screen - Terminal multiplexer" off
-      "3" "nload - Network traffic monitor" off
-      "4" "nano - Text editor" off
-      "5" "firewalld - Firewall management" off
-      "6" "fail2ban - Intrusion prevention system" off
-      "7" "unattended-upgrades - Automatic updates" off
-      "8" "git - Version control system" off)
-
-    # Display the dialog menu and store the user's choices
-    choices=$(dialog --clear --title "Essential Apps Installer" --checklist "Choose which apps to install:" 0 0 0 "${options[@]}" 2>&1 >/dev/tty)
-
-    # Check if the user canceled or made no selection
+    # Check if the installation was successful
     if [ $? -ne 0 ]; then
-      clear
-      echo "Canceled. Returning to the main menu."
+      echo "Error: Failed to install dialog. Exiting."
       return
     fi
+  fi
 
-    # Process user choices and install selected apps
-    selected_apps=""
+  # Define the dialog menu options
+  app_options=("1" "htop - Interactive process viewer" off
+    "2" "screen - Terminal multiplexer" off
+    "3" "nload - Network traffic monitor" off
+    "4" "nano - Text editor" off
+    "5" "firewalld - Firewall management" off
+    "6" "fail2ban - Intrusion prevention system" off
+    "7" "unattended-upgrades - Automatic updates" off
+    "8" "git - Version control system" off)
 
-    for choice in $choices; do
-      case $choice in
-      1) selected_apps+=" htop" ;;
-      2) selected_apps+=" screen" ;;
-      3) selected_apps+=" nload" ;;
-      4) selected_apps+=" nano" ;;
-      5) selected_apps+=" firewalld" ;;
-      6) selected_apps+=" fail2ban" ;;
-      7) selected_apps+=" unattended-upgrades" ;;
-      8) selected_apps+=" git" ;;
-      esac
-    done
+  # Display the dialog menu and store the user's choices
+  choices=$(dialog --clear --title "Essential Apps Installer" --checklist "Choose which apps to install:" 0 0 0 "${app_options[@]}" 2>&1 >/dev/tty)
 
-    echo "Installing selected apps: $selected_apps"
-    sudo apt update && sudo apt install $selected_apps -y
-
-    # Check if firewalld was selected
-    if [[ "$selected_apps" == *"firewalld"* ]]; then
-      configure_firewall
-    fi
-
-    # Check if Fail2ban was selected
-    if [[ "$selected_apps" == *"fail2ban"* ]]; then
-      configure_fail2ban
-    fi
-
-    # Check if unattended-upgrades was selected
-    if [[ "$selected_apps" == *"unattended-upgrades"* ]]; then
-      sudo dpkg-reconfigure -plow unattended-upgrades
-    fi
-
-    # Check if Git was selected and is installed
-    if [[ "$selected_apps" == *"git"* ]] && ! [ -x "$(command -v git)" ]; then
-      echo "Git is not installed. Installing Git..."
-      sudo apt install git -y
-    fi
-
-    # Configure Git only if it was selected
-    if [[ "$selected_apps" == *"git"* ]]; then
-      configure_git
-    fi
-
-    echo "Installation complete."
+  # Check if the user canceled or made no selection
+  if [ $? -ne 0 ]; then
+    clear
+    echo "Canceled. Returning to the main menu."
     return
+  fi
+
+  # Process user choices and install selected apps
+  selected_applications=""
+
+  for choice in $choices; do
+    case $choice in
+    1) selected_applications+=" htop" ;;
+    2) selected_applications+=" screen" ;;
+    3) selected_applications+=" nload" ;;
+    4) selected_applications+=" nano" ;;
+    5) selected_applications+=" firewalld" ;;
+    6) selected_applications+=" fail2ban" ;;
+    7) selected_applications+=" unattended-upgrades" ;;
+    8) selected_applications+=" git" ;;
+    esac
   done
+
+  if [ -z "$selected_applications" ]; then
+    echo "No apps selected. Returning to the main menu."
+    return
+  fi
+
+  echo "Installing selected apps: $selected_applications"
+  sudo apt update && sudo apt install $selected_applications -y
+
+  # Check if there was an error during installation
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to install some or all of the selected apps. Please check your internet connection and try again."
+    return
+  fi
+
+  # Check if firewalld was selected
+  if [[ "$selected_applications" == *"firewalld"* ]]; then
+    configure_firewall
+  fi
+
+  # Check if Fail2ban was selected
+  if [[ "$selected_applications" == *"fail2ban"* ]]; then
+    configure_fail2ban
+  fi
+
+  # Check if unattended-upgrades was selected
+  if [[ "$selected_applications" == *"unattended-upgrades"* ]]; then
+    sudo dpkg-reconfigure -plow unattended-upgrades
+  fi
+
+  # Configure Git only if it was selected
+  if [[ "$selected_applications" == *"git"* ]]; then
+    configure_git
+  fi
+
+  echo "Installation complete."
+  return
 }
 
 # Function to configure the firewall with checks
@@ -231,7 +248,7 @@ setup_ssh_key_authentication() {
   echo "#######################################################"
 
   # Read the user-provided public key and save it to a variable
-  IFS= read -r user_public_key
+  IFS= read -r ssh_public_key
 
   # Create the ~/.ssh directory if it doesn't exist
   mkdir -p "$HOME/.ssh"
@@ -239,9 +256,9 @@ setup_ssh_key_authentication() {
   authorized_keys_file="$HOME/.ssh/authorized_keys"
 
   # Check if the authorized_keys file exists and the key is not already present
-  if [ -f "$authorized_keys_file" ] && ! grep -q "$user_public_key" "$authorized_keys_file"; then
+  if [ -f "$authorized_keys_file" ] && ! grep -q "$ssh_public_key" "$authorized_keys_file"; then
     # Save the public key to the authorized_keys file
-    echo "$user_public_key" >>"$authorized_keys_file"
+    echo "$ssh_public_key" >>"$authorized_keys_file"
     if [ $? -ne 0 ]; then
       echo "Error: Failed to save the public key to authorized_keys file."
       exit 1
@@ -250,7 +267,7 @@ setup_ssh_key_authentication() {
     echo "Public key added to authorized_keys."
   elif [ ! -f "$authorized_keys_file" ]; then
     echo "Creating authorized_keys file..."
-    echo "$user_public_key" >"$authorized_keys_file"
+    echo "$ssh_public_key" >"$authorized_keys_file"
     if [ $? -ne 0 ]; then
       echo "Error: Failed to create authorized_keys file."
       exit 1
@@ -422,18 +439,14 @@ restore_ssh_config() {
   fi
 }
 
-# Function to walidate ports
+# Function to validate if a given input is a valid port number
 validate_port() {
   local port="$1"
-  if ! [[ "$port" =~ ^[0-9]+$ ]]; then
-    echo "Error: Invalid port number. Please enter a valid numeric port."
-    return 1
+  if ! [[ "$port" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+    echo "Error: Invalid port number. Please enter a valid numeric port between 1 and 65535."
+    return 1 # Invalid port
   fi
-
-  if [[ "$port" -lt 1 || "$port" -gt 65535 ]]; then
-    echo "Error: Port number should be between 1 and 65535."
-    return 1
-  fi
+  return 0 # Valid port
 }
 
 # Function to configure Git
@@ -517,13 +530,13 @@ configure_fail2ban() {
     sudo apt install fail2ban -y
     ;;
   2)
-    read -rp "Enter the URL of the user custom configuration: " custom_config_url
+    read -rp "Enter the URL of the user custom configuration: " fail2ban_custom_config_url
 
     # Check if the URL is valid and accessible
-    if wget --spider "$custom_config_url" 2>/dev/null; then
+    if wget --spider "$fail2ban_custom_config_url" 2>/dev/null; then
       # Install Fail2ban if not already installed
       sudo apt install fail2ban -y
-      sudo wget -O /etc/fail2ban/jail.local "$custom_config_url"
+      sudo wget -O /etc/fail2ban/jail.local "$fail2ban_custom_config_url"
       echo "User custom Fail2ban configuration applied."
     else
       echo "Warning: Invalid URL or unable to reach the URL. Using the default configuration."
@@ -544,15 +557,10 @@ configure_static_ip() {
   clear
   echo "Configuring a static IP address using Netplan."
 
-  # Check if Netplan is installed, and if not, prompt the user to install it
-  if ! command -v netplan &>/dev/null; then
-    read -rp "Netplan is not installed. Do you want to install it? (Y/n): " install_netplan
-    if [[ "$install_netplan" =~ ^[Yy]$ ]]; then
-      sudo apt install netplan -y
-    else
-      echo "Netplan is required to configure the static IP address using this script. Exiting."
-      exit 1
-    fi
+  # Check if Netplan is installed, and if not, install it
+  if ! [ -x "$(command -v netplan)" ]; then
+    echo "Netplan is not installed. Installing..."
+    sudo apt update && sudo apt install netplan -y
   fi
 
   # Prompt installation of ifconfig
@@ -572,11 +580,11 @@ configure_static_ip() {
   echo "$device_info"
 
   # Prompt the user to enter the desired network device
-  read -rp "Enter the network device name (e.g., enp5s0): " selected_device
+  read -rp "Enter the network device name (e.g., enp5s0): " network_device
 
   # Check if the selected device exists in the device information
-  if ! echo "$device_info" | grep -q "$selected_device:"; then
-    echo "Error: The selected network device '$selected_device' does not exist. Please enter a valid device name."
+  if ! echo "$device_info" | grep -q "$network_device:"; then
+    echo "Error: The selected network device '$network_device' does not exist. Please enter a valid device name."
     return
   fi
 
@@ -598,7 +606,7 @@ configure_static_ip() {
 network:
   version: 2
   ethernets:
-    $selected_device:
+    $network_device:
       addresses: [$static_ip_address/$net_mask]
       gateway4: $gateway
       nameservers:
@@ -608,7 +616,7 @@ EOL
   # Apply the Netplan configuration
   sudo netplan apply
 
-  echo "Static IP address configuration completed for $selected_device."
+  echo "Static IP address configuration completed for $network_device."
 }
 
 # Main script
