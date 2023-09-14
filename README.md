@@ -1,12 +1,20 @@
-# Handy Ubuntu System Setup Script
+# Handy System Setup Script
 
 [![Code Size](https://img.shields.io/github/languages/code-size/Decaded/install-script)](https://github.com/Decaded/install-script)
 [![Open Issues](https://img.shields.io/github/issues/Decaded/install-script)](https://github.com/Decaded/install-script/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/Decaded/install-script)](https://github.com/Decaded/install-script/pulls)
 [![Last Commit](https://img.shields.io/github/last-commit/Decaded/install-script)](https://github.com/Decaded/install-script/commits)
 
-Welcome to this nifty Ubuntu System Setup Script! This script is your go-to tool for setting up and supercharging your Ubuntu system in a jiffy. It's all about making your system
-cooler, more secure, and tuned to your liking.
+### Hey there!
+
+This script is your trusty toolkit for server tinkering on Ubuntu systems. It's like that reliable old toolbox in your garage, packed with essentials. You can install essential
+apps, set up NGINX, tinker with PHP, mess around with NVM, and more.
+
+Just remember, it's been hanging out with Ubuntu during development and testing. While it might be friendly with other Linux systems, it's primarily designed for Ubuntu. If you're
+using a different system and wish to see support added, please open an [issue](https://github.com/Decaded/install-script/issues) and explain your use case. We're open to
+suggestions and appreciate your feedback!
+
+---
 
 ## Cool Stuff You Can Do
 
