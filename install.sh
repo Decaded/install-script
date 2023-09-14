@@ -70,6 +70,12 @@ check_sudo_privileges() {
 install_essential_apps() {
   clear
 
+  # Check if dialog is installed, and if not, install it
+  if ! [ -x "$(command -v dialog)" ]; then
+    echo "Dialog is not installed. Installing dialog..."
+    sudo apt update && sudo apt install dialog -y
+  fi
+
   while true; do
     # Define the dialog menu options
     options=("1" "htop - Interactive process viewer" off
@@ -82,7 +88,7 @@ install_essential_apps() {
       "8" "git - Version control system" off)
 
     # Display the dialog menu and store the user's choices
-    choices=$(dialog --clear --title "Select Essential Apps" --checklist "Choose which essential apps to install:" 0 0 0 "${options[@]}" 2>&1 >/dev/tty)
+    choices=$(dialog --clear --title "Essential Apps Installer" --checklist "Choose which apps to install:" 0 0 0 "${options[@]}" 2>&1 >/dev/tty)
 
     # Check if the user canceled or made no selection
     if [ $? -ne 0 ]; then
