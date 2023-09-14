@@ -8,8 +8,6 @@
 Welcome to this nifty Ubuntu System Setup Script! This script is your go-to tool for setting up and supercharging your Ubuntu system in a jiffy. It's all about making your system
 cooler, more secure, and tuned to your liking.
 
----
-
 ## Cool Stuff You Can Do
 
 ### Get Must-Have Tools
@@ -52,6 +50,13 @@ cooler, more secure, and tuned to your liking.
   - Seamlessly switch between different Node.js versions.
   - Easily manage Node.js installations.
   - Keep your Node.js environment up-to-date with the latest releases.
+
+### Configure Static IP Address (New!)
+
+- Set a static IP address for your system with ease.
+- Specify the IP address, subnet mask, gateway, and DNS servers.
+- Enjoy a stable network configuration.
+- As requested in [issue #4](https://github.com/Decaded/install-script/issues/4).
 
 ---
 
