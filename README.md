@@ -1,5 +1,3 @@
-# Handy System Setup Script
-
 [![Code Size](https://img.shields.io/github/languages/code-size/Decaded/install-script)](https://github.com/Decaded/install-script)
 [![Open Issues](https://img.shields.io/github/issues/Decaded/install-script)](https://github.com/Decaded/install-script/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/Decaded/install-script)](https://github.com/Decaded/install-script/pulls)
