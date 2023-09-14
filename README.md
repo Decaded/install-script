@@ -24,18 +24,17 @@ cooler, more secure, and tuned to your liking.
    - We'll help you set it up if it's your first time.
 8. **[unattended-upgrades](https://help.ubuntu.com/community/AutomaticSecurityUpdates)** - Stay safe with automatic security updates.
 
-### Customize Your Setup
+### SSH Authentication
 
-- **SSH Authentication**:
+- Switch to key-based authentication for enhanced security (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1)).
+- You can later revert to password authentication using the option in the menu: `Restore SSH Configuration`.
+- The script automatically creates a backup of your SSH configuration (`sshd_config`) before making changes. It's stored at `/etc/ssh/sshd_config_decoscript.backup`.
+  - **Warning**: Running the script again will overwrite the existing backup file. To preserve it, consider renaming or copying it to another location.
 
-  - Switch to key-based authentication for enhanced security (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1)).
-  - You can later revert to password authentication using option `6` in the menu: `Restore SSH Configuration`.
-  - The script automatically creates a backup of your SSH configuration (`sshd_config`) before making changes, located at `/etc/ssh/sshd_config_decoscript.backup`.
+### Passwordless Sudo Access
 
-- **Passwordless Sudo Access**:
-
-  - Elevate your powers without the hassle of password prompts.
-  - Don't worry; we won't mess with it if you're already in the passwordless sudo club.
+- Elevate your powers without the hassle of password prompts.
+- Don't worry; we won't mess with it if you're already in the passwordless sudo club.
 
 ### Web Server Delight
 
