@@ -570,7 +570,7 @@ configure_static_ip() {
   fi
 
   # Get network device information from 'ifconfig -a'
-  device_info=$(ifconfig -a)
+  device_info=$(sudo ifconfig -a)
 
   # Display available network devices
   echo "Available network devices:"
