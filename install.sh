@@ -90,6 +90,17 @@ install_essential_apps() {
     fi
   fi
 
+  if ! [ -x "$(command -v curl)" ]; then
+    echo "Curl is not installed. Installing curl..."
+    sudo apt update && sudo apt install curl -y
+
+    # Check if the installation was successful
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to install curl. Exiting."
+      return
+    fi
+  fi
+
   # Define the dialog menu options
   app_options=("1" "htop - Interactive process viewer" off
     "2" "screen - Terminal multiplexer" off
@@ -98,7 +109,8 @@ install_essential_apps() {
     "5" "firewalld - Firewall management" off
     "6" "fail2ban - Intrusion prevention system" off
     "7" "unattended-upgrades - Automatic updates" off
-    "8" "git - Version control system" off)
+    "8" "git - Version control system" off
+    "9" "pi-hole - Ad blocker and DHCP server" off)
 
   # Display the dialog menu and store the user's choices
   choices=$(dialog --clear --title "Essential Apps Installer" --checklist "Choose which apps to install:" 0 0 0 "${app_options[@]}" 2>&1 >/dev/tty)
@@ -123,6 +135,7 @@ install_essential_apps() {
     6) selected_applications+=" fail2ban" ;;
     7) selected_applications+=" unattended-upgrades" ;;
     8) selected_applications+=" git" ;;
+    9) selected_applications+=" pi-hole" ;;
     esac
   done
 
@@ -131,6 +144,27 @@ install_essential_apps() {
     return
   fi
 
+  # Check if Pi-hole was selected
+  if [[ "$selected_applications" == *"pi-hole"* ]]; then
+    # Pi-hole installation
+    echo "Installing Pi-hole..."
+    curl -sSL https://install.pi-hole.net | bash
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to install Pi-hole. Please check your internet connection and try again."
+      return
+    fi
+  fi
+
+  # Remove Pi-hole from the list of selected applications
+  selected_applications="${selected_applications//pihole/}"
+
+  # Check if there are any remaining selected applications
+  if [ -z "$selected_applications" ]; then
+    echo "No apps selected. Returning to the main menu."
+    return
+  fi
+
+  # Install the remaining selected applications using apt
   echo "Installing selected apps: $selected_applications"
   sudo apt update && sudo apt install $selected_applications -y
 
