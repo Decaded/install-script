@@ -364,12 +364,6 @@ enable_passwordless_sudo() {
 install_nginx_and_php() {
   clear
 
-  # Check if firewalld is installed
-  if ! command -v firewall-cmd &>/dev/null; then
-    echo "Firewalld is not installed. Please install it before configuring firewall rules."
-    return
-  fi
-
   # Check if NGINX is already installed
   if dpkg -l | grep -q "nginx"; then
     echo "NGINX is already installed. Skipping NGINX installation."
@@ -400,25 +394,31 @@ install_nginx_and_php() {
   echo "Firewall configuration"
   echo "#######################################################"
 
-  # Check if port 80 is open
-  if ! sudo firewall-cmd --list-ports | grep -q "80/tcp"; then
-    echo "Opening port 80 [TCP]..."
-    sudo firewall-cmd --permanent --zone=public --add-port=80/tcp
-  else
-    echo "Port 80 [TCP] is already open. Skipping."
-  fi
+  # Check if firewalld is installed
+  if ! command -v firewall-cmd &>/dev/null; then
+    echo "Firewalld is not installed. Skipping."
 
-  # Check if port 443 is open
-  if ! sudo firewall-cmd --list-ports | grep -q "443/tcp"; then
-    echo "Opening port 443 [TCP]..."
-    sudo firewall-cmd --permanent --zone=public --add-port=443/tcp
   else
-    echo "Port 443 [TCP] is already open. Skipping."
-  fi
+    # Check if port 80 is open
+    if ! sudo firewall-cmd --list-ports | grep -q "80/tcp"; then
+      echo "Opening port 80 [TCP]..."
+      sudo firewall-cmd --permanent --zone=public --add-port=80/tcp
+    else
+      echo "Port 80 [TCP] is already open. Skipping."
+    fi
 
-  echo "Reload configuration..."
-  sudo firewall-cmd --reload
-  echo
+    # Check if port 443 is open
+    if ! sudo firewall-cmd --list-ports | grep -q "443/tcp"; then
+      echo "Opening port 443 [TCP]..."
+      sudo firewall-cmd --permanent --zone=public --add-port=443/tcp
+    else
+      echo "Port 443 [TCP] is already open. Skipping."
+    fi
+
+    echo "Reload configuration..."
+    sudo firewall-cmd --reload
+    echo
+  fi
 
   # Create a directory for SSL certs if it doesn't exist
   if [ -d "/etc/nginx/cert" ]; then
