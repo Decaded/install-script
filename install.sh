@@ -156,7 +156,7 @@ install_essential_apps() {
   fi
 
   # Remove Pi-hole from the list of selected applications
-  selected_applications="${selected_applications//pihole/}"
+  selected_applications="${selected_applications//pi-hole/}"
 
   # Check if there are any remaining selected applications
   if [ -z "$selected_applications" ]; then
