@@ -373,11 +373,11 @@ install_nginx_and_php() {
   fi
 
   # Check if PHP is already installed
-  if dpkg -l | grep -q "php8.1"; then
+  if dpkg -l | grep -q "php8.4"; then
     echo "PHP is already installed. Skipping PHP installation."
   else
     # Install PHP
-    sudo apt install php8.1 php8.1-fpm -y
+    sudo apt install php8.4 php8.4-fpm -y
   fi
 
   # Remove apache2 if it exists
