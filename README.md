@@ -1,11 +1,12 @@
-### Hey there!
+# Hello There, internet traveler
 
-This script is your trusty toolkit for server tinkering on Ubuntu systems. It's like that reliable old toolbox in your garage, packed with essentials. You can install essential
-apps, set up NGINX, tinker with PHP, mess around with NVM, and more.
+### Overview
 
-Just remember, it's been hanging out with Ubuntu during development and testing. While it might be friendly with other Linux systems, it's primarily designed for Ubuntu. If you're
-using a different system and wish to see support added, please open an [issue](https://github.com/Decaded/install-script/issues) and explain your use case. We're open to
-suggestions and appreciate your feedback!
+This script is a modular server utility tool for Debian-based and Ubuntu-based systems. It helps automate common setup tasks without forcing a specific stack. You choose exactly
+what gets installed: essential tools, Nginx, PHP, NVM, static IP profiles, and more.
+
+Ubuntu is the primary target environment. Other Debian derivatives should work, but if you encounter issues, feel free to open an
+[issue](https://github.com/Decaded/install-script/issues) and describe your setup.
 
 <div align="center">
   <a href="https://github.com/Decaded/install-script">
@@ -24,95 +25,142 @@ suggestions and appreciate your feedback!
 
 ---
 
-## Cool Stuff You Can Do
+## Installation and Usage
 
-### Get Must-Have Tools
-
-1. **[htop](https://htop.dev/)** - Check out what's going on with your system processes in a flash.
-2. **[screen](https://www.gnu.org/software/screen/)** - Split your terminal like a pro.
-3. **[nload](https://github.com/rolandriegel/nload)** - Keep an eye on your network traffic.
-4. **[nano](https://www.nano-editor.org/)** - A simple and friendly text editor.
-5. **[firewalld](https://firewalld.org/)** - Manage your firewall settings with ease:
-   - Automatically opens your SSH port (with options for customization).
-6. **[fail2ban](https://github.com/fail2ban/fail2ban)** - Ward off intruders with this handy tool:
-   - Configure it with default settings or go custom.
-7. **[git](https://git-scm.com/)** - The go-to tool for version control:
-   - We'll help you set it up if it's your first time.
-8. **[unattended-upgrades](https://help.ubuntu.com/community/AutomaticSecurityUpdates)** - Stay safe with automatic security updates.
-
-### SSH Authentication
-
-- Switch to key-based authentication for enhanced security (as requested in [issue #1](https://github.com/Decaded/install-script/issues/1)).
-- You can later revert to password authentication using the option in the menu: `Restore SSH Configuration`.
-- The script automatically creates a backup of your SSH configuration (`sshd_config`) before making changes. It's stored at `/etc/ssh/sshd_config_decoscript.backup`.
-  - **Warning**: Running the script again will overwrite the existing backup file. To preserve it, consider renaming or copying it to another location.
-
-### Passwordless Sudo Access
-
-- Elevate your powers without the hassle of password prompts.
-- Don't worry; we won't mess with it if you're already in the passwordless sudo club.
-
-### Web Server Delight
-
-- Want to host a website? We've got you covered with [Nginx](https://www.nginx.com/) & [PHP 8.1 (php-fpm)](https://www.php.net/releases/8_1_0.php).
-- We'll even open up ports 80 and 443 TCP/UDP in the firewall (if you have `firewalld` installed).
-- And if you're still hanging out with [Apache2](https://httpd.apache.org/), we'll give it a polite send-off.
-
-### Node.js Goodness
-
-- Ready to explore the world of Node.js? We've got you covered with [Node Version Manager (NVM)](https://github.com/nvm-sh/nvm).
-- With NVM, you can:
-  - Seamlessly switch between different Node.js versions.
-  - Easily manage Node.js installations.
-  - Keep your Node.js environment up-to-date with the latest releases.
-
-### Configure Static IP Address (New!)
-
-- Set a static IP address for your system with ease.
-- Specify the IP address, subnet mask, gateway, and DNS servers.
-- Enjoy a stable network configuration.
-- As requested in [issue #4](https://github.com/Decaded/install-script/issues/4).
-
----
-
-## How to Make Magic Happen
-
-1. **Download** this _awesome_ script
+1. Download the script:
 
    ```bash
    wget https://raw.githubusercontent.com/Decaded/install-script/main/install.sh
    ```
 
-2. **Give it Permission to Run**:
+2. Make it executable:
 
    ```bash
    sudo chmod +x install.sh
    ```
 
-3. **Run the Script**:
+3. Run it:
 
    ```bash
    ./install.sh
    ```
 
-And then, just pick the goodies you want from our cool menu:
+A menu will appear with all available options.
 
 <div align="center">
-  <img src="images/main_menu.png" alt="Script in Action">
+  <img src="images/main_menu.png" alt="Script Menu Preview">
 </div>
 
 ---
 
-## Join the Fun
+## Features
 
-We're all ears! If you spot something funky or have ideas for making this script even cooler, share it with us via [issues](https://github.com/Decaded/install-script/issues).
+### Essential Tools
 
-## License
+Install a curated pack of common system utilities:
 
-This project is licensed under the [MIT License](LICENSE).
+1. **[htop](https://htop.dev/)** – process viewer
+2. **[screen](https://www.gnu.org/software/screen/)** – terminal multiplexer
+3. **[nload](https://github.com/rolandriegel/nload)** – network traffic monitor
+4. **[nano](https://www.nano-editor.org/)** – simple text editor
+5. **[firewalld](https://firewalld.org/)** – firewall management
+
+   - Automatically opens SSH
+   - Migrates from UFW if needed
+
+6. **[fail2ban](https://github.com/fail2ban/fail2ban)** – intrusion prevention
+
+   - Default configuration or custom rules
+
+7. **[git](https://git-scm.com/)** – version control
+
+   - Optional first-time setup
+
+8. **[unattended-upgrades](https://wiki.debian.org/UnattendedUpgrades)** – automatic security updates
+
+### SSH Configuration
+
+Switch to secure, key-only SSH authentication. The script:
+
+- Disables password-based logins
+- Creates a backup of your SSH config
+- Provides a restore option
+
+Backup file location:
+
+```
+/etc/ssh/sshd_config_decoscript.backup
+```
+
+Re-running the script replaces the old backup, so rename it if you want to keep multiple versions.
+
+### Passwordless Sudo
+
+Enables password-free sudo access if desired. If your system already uses this configuration, the script leaves it unchanged.
+
+### Web Server Setup
+
+- Automatic cleanup of Apache2 if present
+- Firewall rules for HTTP(S) when using firewalld
+
+Installs the full **LEMP** stack:
+
+- **[Nginx](https://nginx.org/)** installation and configuration
+- **[MySQL](https://www.mysql.com/)** installation and secure setup
+- **[PHP](https://www.php.net/)** installation with commonly used modules
+
+  - Configures **php-fpm** to work with Nginx
+  - Installs modules:
+    - **php-cli**
+    - **php-fpm**
+    - **php-mbstring**
+    - **php-curl**
+    - **php-xml**
+    - **php-zip**
+    - **php-gd**
+    - **php-mysql**
+
+- **OR** install Nginx and PHP only,
+- **OR** install only Nginx.
+
+### Node.js via NVM
+
+Installs the latest **[NVM](https://github.com/nvm-sh/nvm)** version and lets you manage Node.js installations cleanly:
+
+- Install or remove Node.js versions
+- Switch between versions
+
+### Static IP Configuration
+
+Configure a static IP address using **Netplan** when available.
+
+Supports:
+
+- IP address
+- Subnet
+- Gateway
+- DNS servers
+
+If Netplan isn’t present, the script chooses the best available method.
 
 ---
 
-## Quick Word of Caution
+## Contributing and Issues
 
-> This script comes as is, without any guarantees. It's your adventure, so be mindful. The author isn't a super-tech guru, so use it with a touch of caution.
+If you notice unexpected behavior or have a suggestion, [open an issue](https://github.com/Decaded/install-script/issues).
+
+Pull requests are welcome.
+
+---
+
+## License
+
+This project is available under the [MIT License](LICENSE).
+
+---
+
+## Disclaimer
+
+This script performs operations that modify system configuration. Use it responsibly, review options before applying them, and keep backups of important files.
+
+> This script comes as is, without any guarantees. It's your adventure, so be mindful.
