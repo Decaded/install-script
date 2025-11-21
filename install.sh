@@ -8,7 +8,7 @@
 # Author: Decaded (https://github.com/Decaded)
 
 # Script version
-SCRIPT_VERSION="2.0.0"
+SCRIPT_VERSION="2.0.1"
 SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/main/install.sh"
 
 # Function to display a menu and get user's choice
@@ -20,7 +20,7 @@ show_menu() {
   echo "╚════════════════════════════════════════════════════════╝"
   echo
   echo "1) Install Essential Apps"
-  echo "2) Install Web Server (LEMP/NGINX/PHP)"
+  echo "2) Install Web Server (LEMP/NGINX)"
   echo "3) Install Node Version Manager (NVM)"
   echo "4) Enable Passwordless sudo access"
   echo "5) Set up SSH key-based authentication"
