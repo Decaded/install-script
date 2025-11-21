@@ -8,7 +8,7 @@
 # Author: Decaded (https://github.com/Decaded)
 
 # Script version
-SCRIPT_VERSION="2.0.1"
+SCRIPT_VERSION="2.1.0"
 SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/main/install.sh"
 
 # Function to display a menu and get user's choice
@@ -158,8 +158,8 @@ update_script() {
     if [ -f "$temp_script" ] && [ -s "$temp_script" ]; then
       chmod +x "$temp_script"
       
-      # Backup current script
-      cp "$0" "${0}.backup" 2>/dev/null || true
+      # Backup current script and remove execute permissions from backup
+      cp "$0" "${0}.backup" 2>/dev/null && chmod -x "${0}.backup" 2>/dev/null || true
       
       # Replace with new version
       mv "$temp_script" "$0"
