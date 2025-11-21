@@ -88,7 +88,7 @@ Switch to secure, key-only SSH authentication. The script:
 
 Backup file location:
 
-```
+``` bash
 /etc/ssh/sshd_config_decoscript.backup
 ```
 
