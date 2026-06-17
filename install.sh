@@ -8,7 +8,7 @@
 # Author: Decaded (https://github.com/Decaded)
 
 # Script version
-SCRIPT_VERSION="2.1.2"
+SCRIPT_VERSION="2.1.3"
 SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/main/install.sh"
 
 # Function to display a menu and get user's choice
@@ -331,11 +331,42 @@ is_armbian_system() {
   return 1
 }
 
+ensure_firewalld_iptables_dependencies() {
+  local missing_packages=()
+
+  if ! dpkg -s iptables >/dev/null 2>&1; then
+    missing_packages+=("iptables")
+  fi
+
+  if ! dpkg -s ipset >/dev/null 2>&1; then
+    missing_packages+=("ipset")
+  fi
+
+  if [ ${#missing_packages[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  echo "Installing firewalld iptables backend dependencies: ${missing_packages[*]}"
+  sudo apt update && sudo apt install "${missing_packages[@]}" -y
+}
+
 set_firewalld_iptables_backend() {
   local firewalld_conf="/etc/firewalld/firewalld.conf"
   local backup_name="${firewalld_conf}.decoscript.backup.$(date +%Y%m%d%H%M%S)"
+  local vendor_conf=""
 
   echo "Trying firewalld iptables backend fallback..."
+
+  if ! ensure_firewalld_iptables_dependencies; then
+    echo "Error: Failed to install firewalld iptables backend dependencies."
+    return 1
+  fi
+
+  if [ -f "/usr/lib/firewalld/firewalld.conf" ]; then
+    vendor_conf="/usr/lib/firewalld/firewalld.conf"
+  elif [ -f "/lib/firewalld/firewalld.conf" ]; then
+    vendor_conf="/lib/firewalld/firewalld.conf"
+  fi
 
   if [ ! -f "$firewalld_conf" ]; then
     if ! sudo mkdir -p "$(dirname "$firewalld_conf")"; then
@@ -343,13 +374,29 @@ set_firewalld_iptables_backend() {
       return 1
     fi
 
-    if ! echo "FirewallBackend=iptables" | sudo tee "$firewalld_conf" >/dev/null; then
-      echo "Error: Failed to create $firewalld_conf."
+    if [ -n "$vendor_conf" ]; then
+      if ! sudo cp "$vendor_conf" "$firewalld_conf"; then
+        echo "Error: Failed to copy default firewalld config from $vendor_conf."
+        return 1
+      fi
+    else
+      if ! echo "FirewallBackend=nftables" | sudo tee "$firewalld_conf" >/dev/null; then
+        echo "Error: Failed to create $firewalld_conf."
+        return 1
+      fi
+    fi
+  elif [ -n "$vendor_conf" ] && ! sudo grep -q "^DefaultZone=" "$firewalld_conf"; then
+    if ! sudo cp "$firewalld_conf" "$backup_name"; then
+      echo "Error: Failed to back up incomplete $firewalld_conf."
       return 1
     fi
 
-    echo "Created $firewalld_conf with FirewallBackend=iptables."
-    return 0
+    if ! sudo cp "$vendor_conf" "$firewalld_conf"; then
+      echo "Error: Failed to restore default firewalld config from $vendor_conf."
+      return 1
+    fi
+
+    echo "Replaced incomplete $firewalld_conf. Backup saved as: $backup_name"
   fi
 
   if sudo grep -q "^FirewallBackend=iptables$" "$firewalld_conf"; then
@@ -357,9 +404,11 @@ set_firewalld_iptables_backend() {
     return 0
   fi
 
-  if ! sudo cp "$firewalld_conf" "$backup_name"; then
-    echo "Error: Failed to back up $firewalld_conf."
-    return 1
+  if [ ! -f "$backup_name" ]; then
+    if ! sudo cp "$firewalld_conf" "$backup_name"; then
+      echo "Error: Failed to back up $firewalld_conf."
+      return 1
+    fi
   fi
 
   if sudo grep -q "^#\\?FirewallBackend=" "$firewalld_conf"; then
