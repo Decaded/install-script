@@ -59,10 +59,10 @@ A menu will appear with all available options.
 
 Install a curated pack of common system utilities:
 
-1. **[htop](https://htop.dev/)** – process viewer
-2. **[screen](https://www.gnu.org/software/screen/)** – terminal multiplexer
+1. **[htop](https://htop.dev/)** or **[btop](https://github.com/aristocratos/btop)** – process viewer
+2. **[screen](https://www.gnu.org/software/screen/)** or **[tmux](https://github.com/tmux/tmux/wiki)** – terminal multiplexer
 3. **[nload](https://github.com/rolandriegel/nload)** – network traffic monitor
-4. **[nano](https://www.nano-editor.org/)** – simple text editor
+4. **[nano](https://www.nano-editor.org/)** or **[Neovim](https://neovim.io/)** – text editor
 5. **[firewalld](https://firewalld.org/)** – firewall management
 
    - Automatically opens SSH

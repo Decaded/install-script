@@ -5,13 +5,88 @@
 # It allows users to install essential apps, set up a web server, configure NVM, enable passwordless sudo,
 # set up SSH key-based authentication and more.
 
-# Author: Decaded (https://github.com/Decaded)
+# Author: Decaded (https://github.com/Decaded | https://decaded.dev)
 
-# Script version
-SCRIPT_VERSION="2.1.2"
+# Sections:
+# - Metadata and Constants
+# - Common Helpers
+# - Menu and Routing
+# - Update System
+# - Essential Apps
+# - Firewalld
+# - SSH
+# - Passwordless Sudo
+# - Web Server
+# - NVM
+# - Git
+# - Fail2ban
+# - Static IP / Netplan
+# - Main
+
+# ==============================================================================
+# Metadata and Constants
+# ==============================================================================
+
+SCRIPT_VERSION="3.0.0"
 SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/main/install.sh"
 
-# Function to display a menu and get user's choice
+SSH_CONFIG="/etc/ssh/sshd_config"
+SSH_BACKUP_PATTERN="/etc/ssh/sshd_config_decoscript.backup.*"
+FIREWALLD_CONF="/etc/firewalld/firewalld.conf"
+NETPLAN_CONFIG="/etc/netplan/01-network-manager-all.yaml"
+NGINX_DEFAULT_SITE="/etc/nginx/sites-available/default"
+NGINX_CERT_DIR="/etc/nginx/cert"
+WEB_ROOT="/var/www/html"
+
+# ==============================================================================
+# Common Helpers
+# ==============================================================================
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+package_installed() {
+  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+}
+
+apt_install() {
+  if [ "$#" -eq 0 ]; then
+    return 0
+  fi
+
+  sudo apt update && sudo apt install "$@" -y
+}
+
+check_sudo_privileges() {
+  sudo -n true
+  if [ $? -ne 0 ]; then
+    echo "You need sudo privilege to run this script."
+    exit 1
+  fi
+}
+
+validate_port() {
+  local port="$1"
+  if ! [[ "$port" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+    echo "Error: Invalid port number. Please enter a valid numeric port between 1 and 65535."
+    return 1
+  fi
+  return 0
+}
+
+has_ssh_config_backup() {
+  compgen -G "$SSH_BACKUP_PATTERN" >/dev/null
+}
+
+latest_ssh_config_backup() {
+  ls -1t $SSH_BACKUP_PATTERN 2>/dev/null | head -n1
+}
+
+# ==============================================================================
+# Menu and Routing
+# ==============================================================================
+
 show_menu() {
   clear
   echo "╔════════════════════════════════════════════════════════╗"
@@ -31,7 +106,7 @@ show_menu() {
   echo "u) Check for script updates"
   echo
 
-  if [ -f "/etc/ssh/sshd_config_decoscript.backup" ]; then
+  if has_ssh_config_backup; then
     echo "9) Restore SSH Configuration"
   fi
 
@@ -49,7 +124,7 @@ show_menu() {
   r|R) revert_static_ip ;;
   u|U) check_for_updates ;;
   9)
-    if [ -f "/etc/ssh/sshd_config_decoscript.backup" ]; then
+    if has_ssh_config_backup; then
       restore_ssh_config
     else
       echo "Invalid choice. Please select a valid option."
@@ -78,34 +153,17 @@ show_menu() {
   esac
 }
 
-# Function to check if the script has sudo privileges
-check_sudo_privileges() {
-  sudo -n true
-  if [ $? -ne 0 ]; then
-    echo "You need sudo privilege to run this script."
-    exit 1
-  fi
-}
+# ==============================================================================
+# Update System
+# ==============================================================================
 
-# Bash-native CIDR to netmask conversion
-cidr_to_netmask() {
-  local bits=$1
-  local mask=$((0xffffffff ^ ((1 << (32 - bits)) - 1)))
-  printf "%d.%d.%d.%d\n" \
-    $(((mask >> 24) & 0xff)) \
-    $(((mask >> 16) & 0xff)) \
-    $(((mask >> 8) & 0xff)) \
-    $((mask & 0xff))
-}
-
-# Function to check for script updates
 check_for_updates() {
   clear
   echo "Checking for script updates..."
   echo
   
   # Check if curl is available
-  if ! command -v curl >/dev/null 2>&1; then
+  if ! command_exists curl; then
     echo "curl is not installed. Cannot check for updates."
     echo "Install curl to enable update checking: sudo apt install curl"
     return 0
@@ -182,82 +240,95 @@ update_script() {
   fi
 }
 
-# Function to install essential apps using dialog
+# ==============================================================================
+# Essential Apps
+# ==============================================================================
+
 install_essential_apps() {
   clear
 
-  # Check if dialog is installed, and if not, install it
-  if ! [ -x "$(command -v dialog)" ]; then
+  if ! command_exists dialog; then
     echo "Dialog is not installed. Installing dialog..."
-    sudo apt update && sudo apt install dialog -y
-
-    # Check if the installation was successful
-    if [ $? -ne 0 ]; then
+    if ! apt_install dialog; then
       echo "Error: Failed to install dialog. Exiting."
       return
     fi
   fi
 
-  if ! [ -x "$(command -v curl)" ]; then
+  if ! command_exists curl; then
     echo "Curl is not installed. Installing curl..."
-    sudo apt update && sudo apt install curl -y
-
-    # Check if the installation was successful
-    if [ $? -ne 0 ]; then
+    if ! apt_install curl; then
       echo "Error: Failed to install curl. Exiting."
       return
     fi
   fi
 
-  # Define the dialog menu options
-  app_options=("1" "htop - Interactive process viewer" off
-    "2" "screen - Terminal multiplexer" off
-    "3" "nload - Network traffic monitor" off
-    "4" "nano - Text editor" off
-    "5" "firewalld - Firewall management" off
-    "6" "fail2ban - Intrusion prevention system" off
-    "7" "unattended-upgrades - Automatic updates" off
-    "8" "git - Version control system" off
-    "9" "pi-hole - Ad blocker and DHCP server" off)
+  local app_options=(
+    "htop" "Process monitor - htop" off
+    "btop" "Process monitor - btop" off
+    "screen" "Terminal multiplexer - screen" off
+    "tmux" "Terminal multiplexer - tmux" off
+    "nload" "Network traffic monitor" off
+    "nano" "Text editor - nano" off
+    "neovim" "Text editor - Neovim" off
+    "firewalld" "Firewall management" off
+    "fail2ban" "Intrusion prevention system" off
+    "unattended-upgrades" "Automatic updates" off
+    "git" "Version control system" off
+    "pi-hole" "Ad blocker and DHCP server" off
+  )
+  local selected_packages=()
+  local choices
+  local choice
+  local install_pihole=false
+  local configure_firewalld=false
+  local configure_fail2ban_after_install=false
+  local configure_unattended_upgrades=false
+  local configure_git_after_install=false
 
-  # Display the dialog menu and store the user's choices
   choices=$(dialog --clear --title "Essential Apps Installer" --checklist "Choose which apps to install:" 0 0 0 "${app_options[@]}" 2>&1 >/dev/tty)
 
-  # Check if the user canceled or made no selection
   if [ $? -ne 0 ]; then
     clear
     echo "Canceled. Returning to the main menu."
     return
   fi
 
-  # Strip quotes from dialog output
   choices=$(echo "$choices" | tr -d '"')
-
-  # Process user choices and install selected apps
-  selected_applications=""
 
   for choice in $choices; do
     case $choice in
-    1) selected_applications+=" htop" ;;
-    2) selected_applications+=" screen" ;;
-    3) selected_applications+=" nload" ;;
-    4) selected_applications+=" nano" ;;
-    5) selected_applications+=" firewalld" ;;
-    6) selected_applications+=" fail2ban" ;;
-    7) selected_applications+=" unattended-upgrades" ;;
-    8) selected_applications+=" git" ;;
-    9) selected_applications+=" pi-hole" ;;
+    htop|btop|screen|tmux|nload|nano|neovim)
+      selected_packages+=("$choice")
+      ;;
+    firewalld)
+      selected_packages+=("firewalld")
+      configure_firewalld=true
+      ;;
+    fail2ban)
+      selected_packages+=("fail2ban")
+      configure_fail2ban_after_install=true
+      ;;
+    unattended-upgrades)
+      selected_packages+=("unattended-upgrades")
+      configure_unattended_upgrades=true
+      ;;
+    git)
+      selected_packages+=("git")
+      configure_git_after_install=true
+      ;;
+    pi-hole)
+      install_pihole=true
+      ;;
     esac
   done
 
-  if [ -z "$selected_applications" ]; then
+  if [ ${#selected_packages[@]} -eq 0 ] && ! $install_pihole; then
     echo "No apps selected. Returning to the main menu."
     return
   fi
 
-  # Check if Pi-hole was selected
-  if [[ "$selected_applications" == *"pi-hole"* ]]; then
-    # Pi-hole installation
+  if $install_pihole; then
     echo "Installing Pi-hole..."
     curl -sSL https://install.pi-hole.net | bash
     if [ $? -ne 0 ]; then
@@ -266,52 +337,39 @@ install_essential_apps() {
     fi
   fi
 
-  # Remove Pi-hole from the list of selected applications
-  selected_applications="${selected_applications//pi-hole/}"
-
-  # Check if there are any remaining selected applications
-  if [ -z "$selected_applications" ]; then
-    echo "No apps selected. Returning to the main menu."
-    return
+  if [ ${#selected_packages[@]} -gt 0 ]; then
+    echo "Installing selected apps: ${selected_packages[*]}"
+    if ! apt_install "${selected_packages[@]}"; then
+      echo "Error: Failed to install some or all of the selected apps. Please check your internet connection and try again."
+      return
+    fi
   fi
 
-  # Install the remaining selected applications using apt
-  echo "Installing selected apps: $selected_applications"
-  sudo apt update && sudo apt install $selected_applications -y
-
-  # Check if there was an error during installation
-  if [ $? -ne 0 ]; then
-    echo "Error: Failed to install some or all of the selected apps. Please check your internet connection and try again."
-    return
-  fi
-
-  # Check if firewalld was selected
-  if [[ "$selected_applications" == *"firewalld"* ]]; then
+  if $configure_firewalld; then
     configure_firewall
   fi
 
-  # Check if Fail2ban was selected
-  if [[ "$selected_applications" == *"fail2ban"* ]]; then
+  if $configure_fail2ban_after_install; then
     configure_fail2ban
   fi
 
-  # Check if unattended-upgrades was selected
-  if [[ "$selected_applications" == *"unattended-upgrades"* ]]; then
+  if $configure_unattended_upgrades; then
     sudo dpkg-reconfigure -plow unattended-upgrades
   fi
 
-  # Configure Git only if it was selected
-  if [[ "$selected_applications" == *"git"* ]]; then
+  if $configure_git_after_install; then
     configure_git
   fi
 
   echo "Installation complete."
-  return
 }
 
-# Firewalld helpers
+# ==============================================================================
+# Firewalld
+# ==============================================================================
+
 ensure_firewalld_installed() {
-  command -v firewall-cmd &>/dev/null
+  command_exists firewall-cmd
 }
 
 is_firewalld_running() {
@@ -331,41 +389,89 @@ is_armbian_system() {
   return 1
 }
 
+ensure_firewalld_iptables_dependencies() {
+  local missing_packages=()
+
+  if ! package_installed iptables; then
+    missing_packages+=("iptables")
+  fi
+
+  if ! package_installed ipset; then
+    missing_packages+=("ipset")
+  fi
+
+  if [ ${#missing_packages[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  echo "Installing firewalld iptables backend dependencies: ${missing_packages[*]}"
+  apt_install "${missing_packages[@]}"
+}
+
 set_firewalld_iptables_backend() {
-  local firewalld_conf="/etc/firewalld/firewalld.conf"
-  local backup_name="${firewalld_conf}.decoscript.backup.$(date +%Y%m%d%H%M%S)"
+  local backup_name="${FIREWALLD_CONF}.decoscript.backup.$(date +%Y%m%d%H%M%S)"
+  local vendor_conf=""
 
   echo "Trying firewalld iptables backend fallback..."
 
-  if [ ! -f "$firewalld_conf" ]; then
-    if ! sudo mkdir -p "$(dirname "$firewalld_conf")"; then
+  if ! ensure_firewalld_iptables_dependencies; then
+    echo "Error: Failed to install firewalld iptables backend dependencies."
+    return 1
+  fi
+
+  if [ -f "/usr/lib/firewalld/firewalld.conf" ]; then
+    vendor_conf="/usr/lib/firewalld/firewalld.conf"
+  elif [ -f "/lib/firewalld/firewalld.conf" ]; then
+    vendor_conf="/lib/firewalld/firewalld.conf"
+  fi
+
+  if [ ! -f "$FIREWALLD_CONF" ]; then
+    if ! sudo mkdir -p "$(dirname "$FIREWALLD_CONF")"; then
       echo "Error: Failed to create /etc/firewalld."
       return 1
     fi
 
-    if ! echo "FirewallBackend=iptables" | sudo tee "$firewalld_conf" >/dev/null; then
-      echo "Error: Failed to create $firewalld_conf."
+    if [ -n "$vendor_conf" ]; then
+      if ! sudo cp "$vendor_conf" "$FIREWALLD_CONF"; then
+        echo "Error: Failed to copy default firewalld config from $vendor_conf."
+        return 1
+      fi
+    else
+      if ! echo "FirewallBackend=nftables" | sudo tee "$FIREWALLD_CONF" >/dev/null; then
+        echo "Error: Failed to create $FIREWALLD_CONF."
+        return 1
+      fi
+    fi
+  elif [ -n "$vendor_conf" ] && ! sudo grep -q "^DefaultZone=" "$FIREWALLD_CONF"; then
+    if ! sudo cp "$FIREWALLD_CONF" "$backup_name"; then
+      echo "Error: Failed to back up incomplete $FIREWALLD_CONF."
       return 1
     fi
 
-    echo "Created $firewalld_conf with FirewallBackend=iptables."
-    return 0
+    if ! sudo cp "$vendor_conf" "$FIREWALLD_CONF"; then
+      echo "Error: Failed to restore default firewalld config from $vendor_conf."
+      return 1
+    fi
+
+    echo "Replaced incomplete $FIREWALLD_CONF. Backup saved as: $backup_name"
   fi
 
-  if sudo grep -q "^FirewallBackend=iptables$" "$firewalld_conf"; then
+  if sudo grep -q "^FirewallBackend=iptables$" "$FIREWALLD_CONF"; then
     echo "Firewalld already uses the iptables backend."
     return 0
   fi
 
-  if ! sudo cp "$firewalld_conf" "$backup_name"; then
-    echo "Error: Failed to back up $firewalld_conf."
-    return 1
+  if [ ! -f "$backup_name" ]; then
+    if ! sudo cp "$FIREWALLD_CONF" "$backup_name"; then
+      echo "Error: Failed to back up $FIREWALLD_CONF."
+      return 1
+    fi
   fi
 
-  if sudo grep -q "^#\\?FirewallBackend=" "$firewalld_conf"; then
-    sudo sed -i "s/^#\\?FirewallBackend=.*/FirewallBackend=iptables/" "$firewalld_conf"
+  if sudo grep -q "^#\\?FirewallBackend=" "$FIREWALLD_CONF"; then
+    sudo sed -i "s/^#\\?FirewallBackend=.*/FirewallBackend=iptables/" "$FIREWALLD_CONF"
   else
-    echo "FirewallBackend=iptables" | sudo tee -a "$firewalld_conf" >/dev/null
+    echo "FirewallBackend=iptables" | sudo tee -a "$FIREWALLD_CONF" >/dev/null
   fi
 
   if [ $? -ne 0 ]; then
@@ -373,7 +479,7 @@ set_firewalld_iptables_backend() {
     return 1
   fi
 
-  echo "Updated $firewalld_conf. Backup saved as: $backup_name"
+  echo "Updated $FIREWALLD_CONF. Backup saved as: $backup_name"
 }
 
 start_firewalld() {
@@ -438,7 +544,7 @@ add_firewalld_tcp_port() {
     return $?
   fi
 
-  if ! command -v firewall-offline-cmd &>/dev/null; then
+  if ! command_exists firewall-offline-cmd; then
     echo "Error: firewalld is not running and firewall-offline-cmd is not available."
     return 1
   fi
@@ -452,7 +558,33 @@ add_firewalld_tcp_port() {
   sudo firewall-offline-cmd --zone=public --add-port="$port"/tcp
 }
 
-# Function to configure the firewall with checks
+configure_firewalld_ports() {
+  local firewalld_was_running=false
+  local port
+
+  if ! ensure_firewalld_installed; then
+    echo "Firewalld is not installed. Skipping."
+    return 0
+  fi
+
+  if is_firewalld_running; then
+    firewalld_was_running=true
+  fi
+
+  for port in "$@"; do
+    if ! add_firewalld_tcp_port "$port"; then
+      echo "Warning: Failed to open port $port [TCP]."
+    fi
+  done
+
+  if $firewalld_was_running; then
+    echo "Reload configuration..."
+    sudo firewall-cmd --reload
+  else
+    echo "Firewalld is not running. Rules were saved and will apply when it starts."
+  fi
+}
+
 configure_firewall() {
   clear
 
@@ -506,20 +638,25 @@ configure_firewall() {
   echo
 }
 
-# Function to set up SSH key-based authentication
+# ==============================================================================
+# SSH
+# ==============================================================================
+
 setup_ssh_key_authentication() {
   clear
 
   # Check if SSH service is installed
-  if ! dpkg -l | grep -q "openssh-server"; then
+  if ! package_installed openssh-server; then
     echo "SSH service (openssh-server) is not installed."
 
     # Ask the user if they want to install SSH service
     read -rp "Do you want to install SSH service? (Y/n): " install_ssh_service
 
     if [[ "$install_ssh_service" =~ ^[Yy]$ || "$install_ssh_service" == "" ]]; then
-      sudo apt update
-      sudo apt install openssh-server -y
+      if ! apt_install openssh-server; then
+        echo "Error: Failed to install openssh-server."
+        return
+      fi
     else
       echo "SSH service will not be installed. Returning to the main menu."
       return
@@ -530,17 +667,17 @@ setup_ssh_key_authentication() {
   
   # Backup with max 5 kept
   local max_backups=5
-  local backup_name="/etc/ssh/sshd_config_decoscript.backup.$(date +%Y%m%d%H%M%S)"
+  local backup_name="${SSH_CONFIG}_decoscript.backup.$(date +%Y%m%d%H%M%S)"
   
   # Create a backup of the sshd_config file
-  sudo cp /etc/ssh/sshd_config "$backup_name"
+  sudo cp "$SSH_CONFIG" "$backup_name"
   echo "Backup created: $backup_name"
   
   # Clean old backups, keep only the most recent $max_backups
-  local backup_count=$(ls -1t /etc/ssh/sshd_config_decoscript.backup.* 2>/dev/null | wc -l)
+  local backup_count=$(ls -1t $SSH_BACKUP_PATTERN 2>/dev/null | wc -l)
   if [ "$backup_count" -gt "$max_backups" ]; then
     echo "Cleaning old backups (keeping $max_backups most recent)..."
-    ls -1t /etc/ssh/sshd_config_decoscript.backup.* 2>/dev/null | tail -n +$((max_backups + 1)) | xargs -r sudo rm -f
+    ls -1t $SSH_BACKUP_PATTERN 2>/dev/null | tail -n +$((max_backups + 1)) | xargs -r sudo rm -f
   fi
 
   echo "#######################################################"
@@ -583,11 +720,11 @@ setup_ssh_key_authentication() {
   fi
 
   # Enable key-based authentication and disable password-based authentication for SSH
-  sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-  sudo sed -i 's/^#PubkeyAuthentication no/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-  sudo sed -i 's/^PubkeyAuthentication no/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+  sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' "$SSH_CONFIG"
+  sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' "$SSH_CONFIG"
+  sudo sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' "$SSH_CONFIG"
+  sudo sed -i 's/^#PubkeyAuthentication no/PubkeyAuthentication yes/' "$SSH_CONFIG"
+  sudo sed -i 's/^PubkeyAuthentication no/PubkeyAuthentication yes/' "$SSH_CONFIG"
 
   # Restart the SSH service for changes to take effect
   sudo service ssh restart
@@ -602,7 +739,53 @@ setup_ssh_key_authentication() {
   echo
 }
 
-# Function to enable passwordless sudo access
+restore_ssh_config() {
+  clear
+
+  local backup
+  backup=$(latest_ssh_config_backup)
+
+  if [ -z "$backup" ]; then
+    echo "Error: No backup files found matching $SSH_BACKUP_PATTERN"
+    return
+  fi
+
+  echo "Found backup: $backup"
+  read -rp "Do you want to restore SSH configuration from this backup? (y/N): " confirm_restore
+
+  if [[ ! "$confirm_restore" =~ ^[Yy]$ ]]; then
+    echo "Restore cancelled."
+    return
+  fi
+
+  echo "Restoring SSH configuration..."
+  sudo cp "$backup" "$SSH_CONFIG"
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to restore SSH configuration."
+    exit 1
+  fi
+
+  sudo service ssh restart
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to restart the SSH service."
+    exit 1
+  fi
+
+  echo "SSH configuration has been restored."
+
+  read -rp "Do you want to keep the backup file? (Y/n): " keep_backup
+  if [[ "$keep_backup" =~ ^[Nn]$ ]]; then
+    sudo rm "$backup"
+    echo "Backup file deleted."
+  else
+    echo "Backup file kept at: $backup"
+  fi
+}
+
+# ==============================================================================
+# Passwordless Sudo
+# ==============================================================================
+
 enable_passwordless_sudo() {
   clear
   local username="$1"
@@ -629,7 +812,10 @@ enable_passwordless_sudo() {
   echo
 }
 
-# Function to install NGINX and PHP with firewall checks
+# ==============================================================================
+# Web Server
+# ==============================================================================
+
 install_nginx_and_php() {
   clear
 
@@ -686,43 +872,19 @@ install_nginx_and_php() {
   echo "#######################################################"
   echo "Firewall configuration"
   echo "#######################################################"
-
-  if ! ensure_firewalld_installed; then
-    echo "Firewalld is not installed. Skipping."
-
-  else
-    firewalld_was_running=false
-    if is_firewalld_running; then
-      firewalld_was_running=true
-    fi
-
-    if ! add_firewalld_tcp_port 80; then
-      echo "Warning: Failed to open port 80 [TCP]."
-    fi
-
-    if ! add_firewalld_tcp_port 443; then
-      echo "Warning: Failed to open port 443 [TCP]."
-    fi
-
-    if $firewalld_was_running; then
-      echo "Reload configuration..."
-      sudo firewall-cmd --reload
-    else
-      echo "Firewalld is not running. Rules were saved and will apply when it starts."
-    fi
-    echo
-  fi
+  configure_firewalld_ports 80 443
+  echo
 
   # Create a directory for SSL certs if it doesn't exist
-  if [ ! -d "/etc/nginx/cert" ]; then
-    echo "Creating directory /etc/nginx/cert"
-    sudo mkdir -p /etc/nginx/cert
-    sudo chmod 700 /etc/nginx/cert
+  if [ ! -d "$NGINX_CERT_DIR" ]; then
+    echo "Creating directory $NGINX_CERT_DIR"
+    sudo mkdir -p "$NGINX_CERT_DIR"
+    sudo chmod 700 "$NGINX_CERT_DIR"
   fi
 
   echo
   echo "Finished setting up NGINX and PHP."
-  echo "You can upload SSL certificates into /etc/nginx/cert"
+  echo "You can upload SSL certificates into $NGINX_CERT_DIR"
   echo
 }
 
@@ -800,9 +962,9 @@ install_lemp_stack() {
   echo "  - PHP with PHP-FPM"
   echo
   echo "Next steps:"
-  echo "  1. Place your website files in /var/www/html/"
+  echo "  1. Place your website files in $WEB_ROOT/"
   echo "  2. Configure NGINX sites in /etc/nginx/sites-available/"
-  echo "  3. SSL certificates go in /etc/nginx/cert/"
+  echo "  3. SSL certificates go in $NGINX_CERT_DIR/"
   echo "  4. MySQL: sudo mysql -u root -p"
   echo "═══════════════════════════════════════════════════════"
   read -rp "Press Enter to continue..."
@@ -829,9 +991,9 @@ install_nginx_php() {
   echo "  - PHP with PHP-FPM"
   echo
   echo "Next steps:"
-  echo "  1. Place your website files in /var/www/html/"
+  echo "  1. Place your website files in $WEB_ROOT/"
   echo "  2. Configure NGINX sites in /etc/nginx/sites-available/"
-  echo "  3. SSL certificates go in /etc/nginx/cert/"
+  echo "  3. SSL certificates go in $NGINX_CERT_DIR/"
   echo "═══════════════════════════════════════════════════════"
   read -rp "Press Enter to continue..."
 }
@@ -854,9 +1016,9 @@ install_nginx_only() {
   echo "  - NGINX web server"
   echo
   echo "Next steps:"
-  echo "  1. Place your static files in /var/www/html/"
+  echo "  1. Place your static files in $WEB_ROOT/"
   echo "  2. Configure NGINX sites in /etc/nginx/sites-available/"
-  echo "  3. SSL certificates go in /etc/nginx/cert/"
+  echo "  3. SSL certificates go in $NGINX_CERT_DIR/"
   echo "═══════════════════════════════════════════════════════"
   read -rp "Press Enter to continue..."
 }
@@ -918,8 +1080,8 @@ configure_nginx_php() {
   echo "Configuring NGINX for PHP..."
   
   # Backup default config
-  if [ -f /etc/nginx/sites-available/default ]; then
-    sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.backup
+  if [ -f "$NGINX_DEFAULT_SITE" ]; then
+    sudo cp "$NGINX_DEFAULT_SITE" "${NGINX_DEFAULT_SITE}.backup"
   fi
   
   # Detect PHP-FPM socket
@@ -931,12 +1093,12 @@ configure_nginx_php() {
   fi
   
   # Create a working default config
-  sudo tee /etc/nginx/sites-available/default >/dev/null <<EOF
+  sudo tee "$NGINX_DEFAULT_SITE" >/dev/null <<EOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
 
-    root /var/www/html;
+    root $WEB_ROOT;
     index index.php index.html index.htm;
 
     server_name _;
@@ -965,10 +1127,10 @@ EOF
   fi
   
   # Create a test PHP file
-  echo "<?php phpinfo(); ?>" | sudo tee /var/www/html/info.php >/dev/null
+  echo "<?php phpinfo(); ?>" | sudo tee "$WEB_ROOT/info.php" >/dev/null
   echo
   echo "Test PHP installation: http://your-server-ip/info.php"
-  echo "Remember to delete /var/www/html/info.php after testing!"
+  echo "Remember to delete $WEB_ROOT/info.php after testing!"
 }
 
 # Helper: Configure NGINX for static files only
@@ -977,17 +1139,17 @@ configure_nginx_static() {
   echo "Configuring NGINX for static content..."
   
   # Backup default config
-  if [ -f /etc/nginx/sites-available/default ]; then
-    sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.backup
+  if [ -f "$NGINX_DEFAULT_SITE" ]; then
+    sudo cp "$NGINX_DEFAULT_SITE" "${NGINX_DEFAULT_SITE}.backup"
   fi
   
   # Create a clean static config
-  sudo tee /etc/nginx/sites-available/default >/dev/null <<EOF
+  sudo tee "$NGINX_DEFAULT_SITE" >/dev/null <<EOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
 
-    root /var/www/html;
+    root $WEB_ROOT;
     index index.html index.htm;
 
     server_name _;
@@ -1017,21 +1179,21 @@ finalize_web_server_install() {
   echo "Finalizing installation..."
   
   # Create cert directory
-  if [ ! -d "/etc/nginx/cert" ]; then
-    sudo mkdir -p /etc/nginx/cert
-    sudo chmod 700 /etc/nginx/cert
-    echo "Created /etc/nginx/cert for SSL certificates."
+  if [ ! -d "$NGINX_CERT_DIR" ]; then
+    sudo mkdir -p "$NGINX_CERT_DIR"
+    sudo chmod 700 "$NGINX_CERT_DIR"
+    echo "Created $NGINX_CERT_DIR for SSL certificates."
   fi
   
   # Ensure web root exists with correct permissions
-  if [ ! -d "/var/www/html" ]; then
-    sudo mkdir -p /var/www/html
+  if [ ! -d "$WEB_ROOT" ]; then
+    sudo mkdir -p "$WEB_ROOT"
   fi
-  sudo chown -R www-data:www-data /var/www/html
+  sudo chown -R www-data:www-data "$WEB_ROOT"
   
   # Create a simple index.html if none exists
-  if [ ! -f "/var/www/html/index.html" ] && [ ! -f "/var/www/html/index.php" ]; then
-    sudo tee /var/www/html/index.html >/dev/null <<EOF
+  if [ ! -f "$WEB_ROOT/index.html" ] && [ ! -f "$WEB_ROOT/index.php" ]; then
+    sudo tee "$WEB_ROOT/index.html" >/dev/null <<EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -1047,38 +1209,21 @@ finalize_web_server_install() {
 </body>
 </html>
 EOF
-    sudo chown www-data:www-data /var/www/html/index.html
+    sudo chown www-data:www-data "$WEB_ROOT/index.html"
   fi
   
   # Configure firewall if available
-  if ensure_firewalld_installed; then
-    echo
-    echo "Configuring firewall..."
-
-    firewalld_was_running=false
-    if is_firewalld_running; then
-      firewalld_was_running=true
-    fi
-    
-    if ! add_firewalld_tcp_port 80; then
-      echo "Warning: Failed to open port 80 (HTTP)."
-    fi
-    
-    if ! add_firewalld_tcp_port 443; then
-      echo "Warning: Failed to open port 443 (HTTPS)."
-    fi
-    
-    if $firewalld_was_running; then
-      sudo firewall-cmd --reload
-    else
-      echo "Firewalld is not running. Rules were saved and will apply when it starts."
-    fi
-  fi
+  echo
+  echo "Configuring firewall..."
+  configure_firewalld_ports 80 443
   
   echo "Setup complete!"
 }
 
-# Function to install Node Version Manager (NVM)
+# ==============================================================================
+# NVM
+# ==============================================================================
+
 install_nvm() {
   clear
   # Using master branch to always get latest NVM
@@ -1102,62 +1247,10 @@ install_nvm() {
   echo
 }
 
-# Function to restore SSH configuration
-restore_ssh_config() {
-  clear
-  
-  # Find the most recent backup
-  local backup
-  backup=$(ls -1t /etc/ssh/sshd_config_decoscript.backup.* 2>/dev/null | head -n1)
-  
-  if [ -z "$backup" ]; then
-    echo "Error: No backup files found matching /etc/ssh/sshd_config_decoscript.backup.*"
-    return
-  fi
-  
-  echo "Found backup: $backup"
-  read -rp "Do you want to restore SSH configuration from this backup? (y/N): " confirm_restore
-  
-  if [[ ! "$confirm_restore" =~ ^[Yy]$ ]]; then
-    echo "Restore cancelled."
-    return
-  fi
-  
-  echo "Restoring SSH configuration..."
-  sudo cp "$backup" /etc/ssh/sshd_config
-  if [ $? -ne 0 ]; then
-    echo "Error: Failed to restore SSH configuration."
-    exit 1
-  fi
+# ==============================================================================
+# Git
+# ==============================================================================
 
-  sudo service ssh restart
-  if [ $? -ne 0 ]; then
-    echo "Error: Failed to restart the SSH service."
-    exit 1
-  fi
-
-  echo "SSH configuration has been restored."
-  
-  read -rp "Do you want to keep the backup file? (Y/n): " keep_backup
-  if [[ "$keep_backup" =~ ^[Nn]$ ]]; then
-    sudo rm "$backup"
-    echo "Backup file deleted."
-  else
-    echo "Backup file kept at: $backup"
-  fi
-}
-
-# Function to validate if a given input is a valid port number
-validate_port() {
-  local port="$1"
-  if ! [[ "$port" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
-    echo "Error: Invalid port number. Please enter a valid numeric port between 1 and 65535."
-    return 1 # Invalid port
-  fi
-  return 0 # Valid port
-}
-
-# Function to configure Git
 configure_git() {
   while true; do
     clear
@@ -1221,7 +1314,10 @@ configure_git_user() {
   echo "Git has been configured with name: $git_name, email: $git_email, and default branch: $git_default_branch."
 }
 
-# Function to configure fail2ban
+# ==============================================================================
+# Fail2ban
+# ==============================================================================
+
 configure_fail2ban() {
   clear
   echo "Choose the Fail2ban configuration to use:"
@@ -1260,21 +1356,34 @@ configure_fail2ban() {
   echo "Fail2ban configuration completed."
 }
 
-# Function to configure a static IP address using Netplan
+# ==============================================================================
+# Static IP / Netplan
+# ==============================================================================
+
+cidr_to_netmask() {
+  local bits=$1
+  local mask=$((0xffffffff ^ ((1 << (32 - bits)) - 1)))
+  printf "%d.%d.%d.%d\n" \
+    $(((mask >> 24) & 0xff)) \
+    $(((mask >> 16) & 0xff)) \
+    $(((mask >> 8) & 0xff)) \
+    $((mask & 0xff))
+}
+
 configure_static_ip() {
   clear
   echo "Configuring a static IP address using Netplan."
 
   # Check if Netplan is installed, and if not, install it
-  if ! [ -x "$(command -v netplan)" ]; then
+  if ! command_exists netplan; then
     echo "Netplan is not installed. Installing..."
-    sudo apt update && sudo apt install netplan.io -y
+    apt_install netplan.io
   fi
 
   # Check if ifconfig is installed, and if not, install it
-  if ! [ -x "$(command -v ifconfig)" ]; then
+  if ! command_exists ifconfig; then
     echo "Ifconfig (net-tools) is not installed. Installing..."
-    sudo apt update && sudo apt install net-tools -y
+    apt_install net-tools
   fi
 
   # Get network device information from 'ifconfig -a'
@@ -1313,8 +1422,8 @@ configure_static_ip() {
   fi
   
   local backup_timestamp=$(date +%Y%m%d%H%M%S)
-  if [ -f "/etc/netplan/01-network-manager-all.yaml" ]; then
-    sudo cp "/etc/netplan/01-network-manager-all.yaml" "$backup_dir/01-network-manager-all.yaml.$backup_timestamp"
+  if [ -f "$NETPLAN_CONFIG" ]; then
+    sudo cp "$NETPLAN_CONFIG" "$backup_dir/01-network-manager-all.yaml.$backup_timestamp"
     echo "Backup created: $backup_dir/01-network-manager-all.yaml.$backup_timestamp"
   fi
 
@@ -1328,7 +1437,7 @@ configure_static_ip() {
   fi
 
   # Create a Netplan configuration file for the static IP address
-  cat <<EOL | sudo tee "/etc/netplan/01-network-manager-all.yaml" >/dev/null
+  cat <<EOL | sudo tee "$NETPLAN_CONFIG" >/dev/null
 network:
   version: 2
   renderer: $renderer
@@ -1343,7 +1452,7 @@ network:
 EOL
 
   # Set correct permissions (netplan requires 600 or 640)
-  sudo chmod 600 /etc/netplan/01-network-manager-all.yaml
+  sudo chmod 600 "$NETPLAN_CONFIG"
   echo "Set netplan file permissions to 600 (owner read/write only)."
 
   # Apply the Netplan configuration
@@ -1359,14 +1468,14 @@ revert_static_ip() {
   echo "========================================"
   
   # Check if the netplan file exists
-  if [ ! -f "/etc/netplan/01-network-manager-all.yaml" ]; then
-    echo "No static IP configuration found at /etc/netplan/01-network-manager-all.yaml"
+  if [ ! -f "$NETPLAN_CONFIG" ]; then
+    echo "No static IP configuration found at $NETPLAN_CONFIG"
     echo "Nothing to revert."
     return
   fi
   
   echo "This will remove the static IP configuration and revert to DHCP."
-  echo "Current configuration file: /etc/netplan/01-network-manager-all.yaml"
+  echo "Current configuration file: $NETPLAN_CONFIG"
   echo
   read -rp "Do you want to proceed? (y/N): " confirm_revert
   
@@ -1376,7 +1485,7 @@ revert_static_ip() {
   fi
   
   # Get network device information
-  if [ -x "$(command -v ifconfig)" ]; then
+  if command_exists ifconfig; then
     device_info=$(sudo ifconfig -a)
     echo "Available network devices:"
     echo "$device_info"
@@ -1399,7 +1508,7 @@ revert_static_ip() {
   fi
   
   local backup_timestamp=$(date +%Y%m%d%H%M%S)
-  sudo cp "/etc/netplan/01-network-manager-all.yaml" "$backup_dir/01-network-manager-all.yaml.$backup_timestamp"
+  sudo cp "$NETPLAN_CONFIG" "$backup_dir/01-network-manager-all.yaml.$backup_timestamp"
   echo "Backup created: $backup_dir/01-network-manager-all.yaml.$backup_timestamp"
   
   # Determine renderer
@@ -1412,7 +1521,7 @@ revert_static_ip() {
   fi
   
   # Create DHCP configuration
-  cat <<EOL | sudo tee "/etc/netplan/01-network-manager-all.yaml" >/dev/null
+  cat <<EOL | sudo tee "$NETPLAN_CONFIG" >/dev/null
 network:
   version: 2
   renderer: $renderer
@@ -1423,7 +1532,7 @@ network:
 EOL
 
   # Set correct permissions
-  sudo chmod 600 /etc/netplan/01-network-manager-all.yaml
+  sudo chmod 600 "$NETPLAN_CONFIG"
   
   # Apply the configuration
   echo "Applying DHCP configuration..."
@@ -1440,7 +1549,10 @@ EOL
   fi
 }
 
-# Main script
+# ==============================================================================
+# Main
+# ==============================================================================
+
 check_sudo_privileges
 
 while true; do
