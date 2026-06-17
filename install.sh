@@ -8,7 +8,7 @@
 # Author: Decaded (https://github.com/Decaded)
 
 # Script version
-SCRIPT_VERSION="2.1.0"
+SCRIPT_VERSION="2.1.1"
 SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/main/install.sh"
 
 # Function to display a menu and get user's choice
@@ -309,18 +309,70 @@ install_essential_apps() {
   return
 }
 
+# Firewalld helpers
+ensure_firewalld_installed() {
+  command -v firewall-cmd &>/dev/null
+}
+
+is_firewalld_running() {
+  sudo firewall-cmd --state >/dev/null 2>&1
+}
+
+start_firewalld() {
+  echo "Enabling and starting firewalld..."
+
+  if ! sudo systemctl enable firewalld >/dev/null 2>&1; then
+    echo "Error: Failed to enable firewalld."
+    return 1
+  fi
+
+  if ! sudo systemctl start firewalld >/dev/null 2>&1; then
+    echo "Error: Failed to start firewalld."
+    return 1
+  fi
+
+  if ! sudo firewall-cmd --state >/dev/null 2>&1; then
+    echo "Error: Firewalld is not running."
+    return 1
+  fi
+}
+
+add_firewalld_tcp_port() {
+  local port="$1"
+
+  if is_firewalld_running; then
+    if sudo firewall-cmd --permanent --query-port="$port"/tcp >/dev/null 2>&1; then
+      echo "Port $port [TCP] is already open. Skipping."
+      return 0
+    fi
+
+    echo "Opening port $port [TCP]..."
+    sudo firewall-cmd --permanent --zone=public --add-port="$port"/tcp
+    return $?
+  fi
+
+  if ! command -v firewall-offline-cmd &>/dev/null; then
+    echo "Error: firewalld is not running and firewall-offline-cmd is not available."
+    return 1
+  fi
+
+  if sudo firewall-offline-cmd --zone=public --query-port="$port"/tcp >/dev/null 2>&1; then
+    echo "Port $port [TCP] is already open. Skipping."
+    return 0
+  fi
+
+  echo "Firewalld is not running. Opening port $port [TCP] in the offline configuration..."
+  sudo firewall-offline-cmd --zone=public --add-port="$port"/tcp
+}
+
 # Function to configure the firewall with checks
 configure_firewall() {
   clear
 
-  # Check if firewalld is installed
-  if ! command -v firewall-cmd &>/dev/null; then
+  if ! ensure_firewalld_installed; then
     echo "Firewalld is not installed. Please install it before configuring firewall rules."
     return
   fi
-
-  # Enable firewalld
-  sudo systemctl enable firewalld
 
   echo "#######################################################"
   echo "Firewall configuration"
@@ -331,12 +383,7 @@ configure_firewall() {
   echo "#######################################################"
 
   read -rp "Please provide your current SSH port (default is 22): " sshPort
-
-  # Check if the SSH port is already open
-  if sudo firewall-cmd --list-ports | grep -q "$sshPort/tcp"; then
-    echo "Port $sshPort [TCP] is already open. Skipping."
-    return
-  fi
+  sshPort=${sshPort:-22}
 
   validate_port "$sshPort"
   if [ $? -ne 0 ]; then
@@ -344,18 +391,29 @@ configure_firewall() {
     exit 1
   fi
 
-  echo "Opening port $sshPort TCP..."
-  sudo firewall-cmd --permanent --zone=public --add-port="$sshPort"/tcp
+  firewalld_was_running=false
+  if is_firewalld_running; then
+    firewalld_was_running=true
+  fi
+
+  add_firewalld_tcp_port "$sshPort"
   if [ $? -ne 0 ]; then
     echo "Error: Failed to open firewall port."
     exit 1
   fi
 
-  echo "Reload configuration..."
-  sudo firewall-cmd --reload
-  if [ $? -ne 0 ]; then
-    echo "Error: Failed to reload firewall configuration."
-    exit 1
+  if $firewalld_was_running; then
+    echo "Reload configuration..."
+    sudo firewall-cmd --reload
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to reload firewall configuration."
+      exit 1
+    fi
+  else
+    start_firewalld
+    if [ $? -ne 0 ]; then
+      exit 1
+    fi
   fi
 
   echo
@@ -542,29 +600,29 @@ install_nginx_and_php() {
   echo "Firewall configuration"
   echo "#######################################################"
 
-  # Check if firewalld is installed
-  if ! command -v firewall-cmd &>/dev/null; then
+  if ! ensure_firewalld_installed; then
     echo "Firewalld is not installed. Skipping."
 
   else
-    # Check if port 80 is open
-    if ! sudo firewall-cmd --list-ports | grep -q "80/tcp"; then
-      echo "Opening port 80 [TCP]..."
-      sudo firewall-cmd --permanent --zone=public --add-port=80/tcp
-    else
-      echo "Port 80 [TCP] is already open. Skipping."
+    firewalld_was_running=false
+    if is_firewalld_running; then
+      firewalld_was_running=true
     fi
 
-    # Check if port 443 is open
-    if ! sudo firewall-cmd --list-ports | grep -q "443/tcp"; then
-      echo "Opening port 443 [TCP]..."
-      sudo firewall-cmd --permanent --zone=public --add-port=443/tcp
-    else
-      echo "Port 443 [TCP] is already open. Skipping."
+    if ! add_firewalld_tcp_port 80; then
+      echo "Warning: Failed to open port 80 [TCP]."
     fi
 
-    echo "Reload configuration..."
-    sudo firewall-cmd --reload
+    if ! add_firewalld_tcp_port 443; then
+      echo "Warning: Failed to open port 443 [TCP]."
+    fi
+
+    if $firewalld_was_running; then
+      echo "Reload configuration..."
+      sudo firewall-cmd --reload
+    else
+      echo "Firewalld is not running. Rules were saved and will apply when it starts."
+    fi
     echo
   fi
 
@@ -906,21 +964,28 @@ EOF
   fi
   
   # Configure firewall if available
-  if command -v firewall-cmd &>/dev/null; then
+  if ensure_firewalld_installed; then
     echo
     echo "Configuring firewall..."
-    
-    if ! sudo firewall-cmd --list-ports | grep -q "80/tcp"; then
-      sudo firewall-cmd --permanent --zone=public --add-port=80/tcp
-      echo "Opened port 80 (HTTP)."
+
+    firewalld_was_running=false
+    if is_firewalld_running; then
+      firewalld_was_running=true
     fi
     
-    if ! sudo firewall-cmd --list-ports | grep -q "443/tcp"; then
-      sudo firewall-cmd --permanent --zone=public --add-port=443/tcp
-      echo "Opened port 443 (HTTPS)."
+    if ! add_firewalld_tcp_port 80; then
+      echo "Warning: Failed to open port 80 (HTTP)."
     fi
     
-    sudo firewall-cmd --reload
+    if ! add_firewalld_tcp_port 443; then
+      echo "Warning: Failed to open port 443 (HTTPS)."
+    fi
+    
+    if $firewalld_was_running; then
+      sudo firewall-cmd --reload
+    else
+      echo "Firewalld is not running. Rules were saved and will apply when it starts."
+    fi
   fi
   
   echo "Setup complete!"
