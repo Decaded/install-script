@@ -8,7 +8,7 @@
 # Author: Decaded (https://github.com/Decaded)
 
 # Script version
-SCRIPT_VERSION="2.1.1"
+SCRIPT_VERSION="2.1.2"
 SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/main/install.sh"
 
 # Function to display a menu and get user's choice
@@ -318,7 +318,67 @@ is_firewalld_running() {
   sudo firewall-cmd --state >/dev/null 2>&1
 }
 
+is_armbian_system() {
+  if [ -f "/etc/armbian-release" ]; then
+    return 0
+  fi
+
+  if [ -f "/etc/os-release" ]; then
+    grep -qiE '^(ID|ID_LIKE|NAME|PRETTY_NAME)=.*armbian' /etc/os-release
+    return $?
+  fi
+
+  return 1
+}
+
+set_firewalld_iptables_backend() {
+  local firewalld_conf="/etc/firewalld/firewalld.conf"
+  local backup_name="${firewalld_conf}.decoscript.backup.$(date +%Y%m%d%H%M%S)"
+
+  echo "Trying firewalld iptables backend fallback..."
+
+  if [ ! -f "$firewalld_conf" ]; then
+    if ! sudo mkdir -p "$(dirname "$firewalld_conf")"; then
+      echo "Error: Failed to create /etc/firewalld."
+      return 1
+    fi
+
+    if ! echo "FirewallBackend=iptables" | sudo tee "$firewalld_conf" >/dev/null; then
+      echo "Error: Failed to create $firewalld_conf."
+      return 1
+    fi
+
+    echo "Created $firewalld_conf with FirewallBackend=iptables."
+    return 0
+  fi
+
+  if sudo grep -q "^FirewallBackend=iptables$" "$firewalld_conf"; then
+    echo "Firewalld already uses the iptables backend."
+    return 0
+  fi
+
+  if ! sudo cp "$firewalld_conf" "$backup_name"; then
+    echo "Error: Failed to back up $firewalld_conf."
+    return 1
+  fi
+
+  if sudo grep -q "^#\\?FirewallBackend=" "$firewalld_conf"; then
+    sudo sed -i "s/^#\\?FirewallBackend=.*/FirewallBackend=iptables/" "$firewalld_conf"
+  else
+    echo "FirewallBackend=iptables" | sudo tee -a "$firewalld_conf" >/dev/null
+  fi
+
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to set FirewallBackend=iptables."
+    return 1
+  fi
+
+  echo "Updated $firewalld_conf. Backup saved as: $backup_name"
+}
+
 start_firewalld() {
+  local backend_fallback_applied=false
+
   echo "Enabling and starting firewalld..."
 
   if ! sudo systemctl enable firewalld >/dev/null 2>&1; then
@@ -326,9 +386,36 @@ start_firewalld() {
     return 1
   fi
 
+  if is_armbian_system; then
+    echo "Armbian detected. Using firewalld iptables backend for compatibility."
+    if ! set_firewalld_iptables_backend; then
+      echo "Error: Failed to configure firewalld backend fallback."
+      return 1
+    fi
+    backend_fallback_applied=true
+  fi
+
   if ! sudo systemctl start firewalld >/dev/null 2>&1; then
-    echo "Error: Failed to start firewalld."
-    return 1
+    if $backend_fallback_applied; then
+      echo "Error: Failed to start firewalld with the iptables backend."
+      echo "Please check details with: sudo systemctl status firewalld"
+      return 1
+    fi
+
+    echo "Warning: Failed to start firewalld with the default backend."
+
+    if ! set_firewalld_iptables_backend; then
+      echo "Error: Failed to configure firewalld backend fallback."
+      return 1
+    fi
+
+    sudo systemctl reset-failed firewalld >/dev/null 2>&1 || true
+
+    if ! sudo systemctl start firewalld >/dev/null 2>&1; then
+      echo "Error: Failed to start firewalld with both nftables and iptables backends."
+      echo "Please check details with: sudo systemctl status firewalld"
+      return 1
+    fi
   fi
 
   if ! sudo firewall-cmd --state >/dev/null 2>&1; then
