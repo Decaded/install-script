@@ -8,7 +8,7 @@
 # Author: Decaded (https://github.com/Decaded)
 
 # Script version
-SCRIPT_VERSION="2.1.3"
+SCRIPT_VERSION="2.1.4"
 SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/main/install.sh"
 
 # Function to display a menu and get user's choice
@@ -331,6 +331,82 @@ is_armbian_system() {
   return 1
 }
 
+# Switch the iptables family tools to the legacy backend.
+switch_iptables_to_legacy() {
+  local tools=("iptables" "ip6tables" "ebtables" "arptables")
+  local record="/etc/firewalld/decoscript-iptables-alternatives.backup"
+  local record_originals=false
+  local switched=false
+  local tool legacy current
+
+  # Only record the original selections the first time we switch, so the user
+  # can restore them manually later without the file growing on every run.
+  if [ ! -f "$record" ]; then
+    record_originals=true
+  fi
+
+  for tool in "${tools[@]}"; do
+    # Skip tools that aren't managed by update-alternatives on this system.
+    if ! update-alternatives --query "$tool" >/dev/null 2>&1; then
+      continue
+    fi
+
+    legacy="/usr/sbin/${tool}-legacy"
+    if [ ! -x "$legacy" ]; then
+      echo "Warning: $legacy not found; cannot switch $tool to the legacy backend."
+      continue
+    fi
+
+    if $record_originals; then
+      current="$(update-alternatives --query "$tool" 2>/dev/null | sed -n 's/^Value: //p')"
+      [ -n "$current" ] && echo "${tool} ${current}" | sudo tee -a "$record" >/dev/null 2>&1 || true
+    fi
+
+    if sudo update-alternatives --set "$tool" "$legacy" >/dev/null 2>&1; then
+      switched=true
+    else
+      echo "Warning: Failed to switch $tool to the legacy backend."
+    fi
+  done
+
+  if $switched; then
+    echo "Switched iptables family tools to the legacy backend (originals recorded in $record)."
+    return 0
+  fi
+
+  echo "Warning: Could not switch any iptables tool to the legacy backend."
+  return 1
+}
+
+# Clear any half-applied state left behind by a failed firewalld start so the
+# next attempt begins from a clean slate.
+flush_firewall_state() {
+  sudo systemctl reset-failed firewalld >/dev/null 2>&1 || true
+}
+
+# Print an actionable diagnostic when firewalld cannot be started with either
+# backend (usually a kernel that lacks the required netfilter modules).
+print_firewalld_failure_diagnostic() {
+  echo
+  echo "Error: firewalld could not be started with either the nftables or the legacy iptables backend."
+  echo "This almost always means the running kernel is missing the required netfilter modules."
+  echo
+  echo "Inspect the failure with:"
+  echo "  sudo systemctl status firewalld"
+  echo "  sudo journalctl -xeu firewalld"
+  echo
+  echo "Check whether the kernel provides the needed modules:"
+  echo "  sudo modprobe nf_tables  2>&1 || echo 'nf_tables not available'"
+  echo "  sudo modprobe ip_tables  2>&1 || echo 'ip_tables not available'"
+  echo
+  echo "If neither module is available, firewalld cannot run on this kernel."
+  echo "Switch to/install a kernel build that ships netfilter support for your board,"
+  echo "or use a different firewall solution."
+  echo "Original iptables alternative selections were recorded in:"
+  echo "  /etc/firewalld/decoscript-iptables-alternatives.backup"
+  echo
+}
+
 ensure_firewalld_iptables_dependencies() {
   local missing_packages=()
 
@@ -401,28 +477,34 @@ set_firewalld_iptables_backend() {
 
   if sudo grep -q "^FirewallBackend=iptables$" "$firewalld_conf"; then
     echo "Firewalld already uses the iptables backend."
-    return 0
-  fi
+  else
+    if [ ! -f "$backup_name" ]; then
+      if ! sudo cp "$firewalld_conf" "$backup_name"; then
+        echo "Error: Failed to back up $firewalld_conf."
+        return 1
+      fi
+    fi
 
-  if [ ! -f "$backup_name" ]; then
-    if ! sudo cp "$firewalld_conf" "$backup_name"; then
-      echo "Error: Failed to back up $firewalld_conf."
+    if sudo grep -q "^#\\?FirewallBackend=" "$firewalld_conf"; then
+      sudo sed -i "s/^#\\?FirewallBackend=.*/FirewallBackend=iptables/" "$firewalld_conf"
+    else
+      echo "FirewallBackend=iptables" | sudo tee -a "$firewalld_conf" >/dev/null
+    fi
+
+    if [ $? -ne 0 ]; then
+      echo "Error: Failed to set FirewallBackend=iptables."
       return 1
     fi
+
+    echo "Updated $firewalld_conf. Backup saved as: $backup_name"
   fi
 
-  if sudo grep -q "^#\\?FirewallBackend=" "$firewalld_conf"; then
-    sudo sed -i "s/^#\\?FirewallBackend=.*/FirewallBackend=iptables/" "$firewalld_conf"
-  else
-    echo "FirewallBackend=iptables" | sudo tee -a "$firewalld_conf" >/dev/null
-  fi
+  # Make sure the iptables backend talks to the kernel via the legacy path
+  # instead of the nft translation layer (best effort; the start attempt that
+  # follows will surface a clear diagnostic if the kernel lacks legacy support).
+  switch_iptables_to_legacy
 
-  if [ $? -ne 0 ]; then
-    echo "Error: Failed to set FirewallBackend=iptables."
-    return 1
-  fi
-
-  echo "Updated $firewalld_conf. Backup saved as: $backup_name"
+  return 0
 }
 
 start_firewalld() {
@@ -436,41 +518,42 @@ start_firewalld() {
   fi
 
   if is_armbian_system; then
-    echo "Armbian detected. Using firewalld iptables backend for compatibility."
+    echo "Armbian detected. Using firewalld iptables (legacy) backend for compatibility."
     if ! set_firewalld_iptables_backend; then
       echo "Error: Failed to configure firewalld backend fallback."
       return 1
     fi
     backend_fallback_applied=true
+    flush_firewall_state
   fi
 
-  if ! sudo systemctl start firewalld >/dev/null 2>&1; then
-    if $backend_fallback_applied; then
-      echo "Error: Failed to start firewalld with the iptables backend."
-      echo "Please check details with: sudo systemctl status firewalld"
-      return 1
-    fi
+  # Use 'restart' (not 'start') so a previously failed unit is actually
+  # re-executed, and confirm readiness via firewall-cmd --state, which is the
+  # check that was failing in the bug report.
+  if sudo systemctl restart firewalld >/dev/null 2>&1 && is_firewalld_running; then
+    return 0
+  fi
 
-    echo "Warning: Failed to start firewalld with the default backend."
+  # The default (nftables) backend failed on a non-Armbian system: try the
+  # legacy iptables backend before giving up.
+  if ! $backend_fallback_applied; then
+    echo "Warning: Failed to start firewalld with the default (nftables) backend."
 
     if ! set_firewalld_iptables_backend; then
       echo "Error: Failed to configure firewalld backend fallback."
       return 1
     fi
+    backend_fallback_applied=true
+    flush_firewall_state
 
-    sudo systemctl reset-failed firewalld >/dev/null 2>&1 || true
-
-    if ! sudo systemctl start firewalld >/dev/null 2>&1; then
-      echo "Error: Failed to start firewalld with both nftables and iptables backends."
-      echo "Please check details with: sudo systemctl status firewalld"
-      return 1
+    if sudo systemctl restart firewalld >/dev/null 2>&1 && is_firewalld_running; then
+      return 0
     fi
   fi
 
-  if ! sudo firewall-cmd --state >/dev/null 2>&1; then
-    echo "Error: Firewalld is not running."
-    return 1
-  fi
+  # Both backends failed: surface an actionable diagnostic instead of a vague error.
+  print_firewalld_failure_diagnostic
+  return 1
 }
 
 add_firewalld_tcp_port() {
