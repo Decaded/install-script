@@ -381,6 +381,13 @@ is_firewalld_running() {
 # module is already loaded; does nothing when the kernel lacks it entirely.
 ensure_netfilter_modules() {
   if lsmod 2>/dev/null | grep -q '^nf_tables'; then
+# Best-effort: ensure the nf_tables kernel module is loaded before starting
+# firewalld. On some minimal SBC/Armbian images the module exists but is not
+# auto-loaded, which makes firewalld fail at startup with
+# "cache initialization failed: Invalid argument". Harmless no-op when the
+# module is already loaded; does nothing when the kernel lacks it entirely.
+ensure_netfilter_modules() {
+  if lsmod 2>/dev/null | grep -q '^nf_tables'; then
     return 0
   fi
 
@@ -428,6 +435,24 @@ start_firewalld() {
     return 1
   fi
 
+  # Verify the kernel can actually run a netfilter backend before we try, so we
+  # can give a clear recommendation instead of a cryptic startup failure.
+  if ! check_netfilter_support; then
+    print_unsupported_kernel_recommendation
+    return 1
+  fi
+
+  # 'restart' (not 'start') re-executes a previously failed unit; confirm the
+  # daemon is actually responsive via firewall-cmd --state.
+  if sudo systemctl restart firewalld >/dev/null 2>&1 && is_firewalld_running; then
+    return 0
+  fi
+
+  echo "Error: Failed to start firewalld."
+  echo "Inspect the failure with:"
+  echo "  sudo systemctl status firewalld"
+  echo "  sudo journalctl -xeu firewalld"
+  return 1
   # Verify the kernel can actually run a netfilter backend before we try, so we
   # can give a clear recommendation instead of a cryptic startup failure.
   if ! check_netfilter_support; then

@@ -1,6 +1,6 @@
 # Hello There, internet traveler
 
-### Overview
+## Overview
 
 This script is a menu-driven server utility tool for Debian-based and Ubuntu-based systems. It helps automate common setup tasks without forcing a specific stack. You choose exactly
 what gets installed: essential tools, Nginx, PHP, NVM, static IP profiles, and more.
