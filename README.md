@@ -2,7 +2,7 @@
 
 ### Overview
 
-This script is a modular server utility tool for Debian-based and Ubuntu-based systems. It helps automate common setup tasks without forcing a specific stack. You choose exactly
+This script is a menu-driven server utility tool for Debian-based and Ubuntu-based systems. It helps automate common setup tasks without forcing a specific stack. You choose exactly
 what gets installed: essential tools, Nginx, PHP, NVM, static IP profiles, and more.
 
 Ubuntu is the primary target environment. Other Debian derivatives should work, but if you encounter issues, feel free to open an
@@ -45,6 +45,8 @@ Ubuntu is the primary target environment. Other Debian derivatives should work, 
    ./install.sh
    ```
 
+The script requires sudo privileges. If your sudo session is not already active, run `sudo -v` first.
+
 A menu will appear with all available options.
 
 <div align="center">
@@ -66,7 +68,7 @@ Install a curated pack of common system utilities:
 5. **[firewalld](https://firewalld.org/)** – firewall management
 
    - Automatically opens SSH
-   - Migrates from UFW if needed
+   - Checks for working netfilter support before starting firewalld
 
 6. **[fail2ban](https://github.com/fail2ban/fail2ban)** – intrusion prevention
 
@@ -77,6 +79,7 @@ Install a curated pack of common system utilities:
    - Optional first-time setup
 
 8. **[unattended-upgrades](https://wiki.debian.org/UnattendedUpgrades)** – automatic security updates
+9. **[Pi-hole](https://pi-hole.net/)** – ad blocker and optional DHCP server
 
 ### SSH Configuration
 
@@ -89,10 +92,10 @@ Switch to secure, key-only SSH authentication. The script:
 Backup file location:
 
 ``` bash
-/etc/ssh/sshd_config_decoscript.backup
+/etc/ssh/sshd_config_decoscript.backup.*
 ```
 
-Re-running the script replaces the old backup, so rename it if you want to keep multiple versions.
+The script keeps the five most recent SSH config backups and offers a restore option from the main menu when a backup exists.
 
 ### Passwordless Sudo
 
@@ -106,7 +109,7 @@ Enables password-free sudo access if desired. If your system already uses this c
 Installs the full **LEMP** stack:
 
 - **[Nginx](https://nginx.org/)** installation and configuration
-- **[MySQL](https://www.mysql.com/)** installation and secure setup
+- **[MySQL](https://www.mysql.com/)** installation with optional `mysql_secure_installation`
 - **[PHP](https://www.php.net/)** installation with commonly used modules
 
   - Configures **php-fpm** to work with Nginx
@@ -125,10 +128,10 @@ Installs the full **LEMP** stack:
 
 ### Node.js via NVM
 
-Installs the latest **[NVM](https://github.com/nvm-sh/nvm)** version and lets you manage Node.js installations cleanly:
+Installs the latest **[NVM](https://github.com/nvm-sh/nvm)** version and lets you choose a Node.js version to install:
 
-- Install or remove Node.js versions
-- Switch between versions
+- Lists recent remote Node.js versions
+- Installs the version you enter
 
 ### Static IP Configuration
 
@@ -141,7 +144,7 @@ Supports:
 - Gateway
 - DNS servers
 
-If Netplan isn’t present, the script chooses the best available method.
+If Netplan isn’t present, the script installs `netplan.io` before writing the configuration. A revert option is available from the main menu.
 
 ---
 

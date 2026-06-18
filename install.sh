@@ -32,7 +32,6 @@ SCRIPT_URL="https://raw.githubusercontent.com/Decaded/install-script/refs/heads/
 
 SSH_CONFIG="/etc/ssh/sshd_config"
 SSH_BACKUP_PATTERN="/etc/ssh/sshd_config_decoscript.backup.*"
-FIREWALLD_CONF="/etc/firewalld/firewalld.conf"
 NETPLAN_CONFIG="/etc/netplan/01-network-manager-all.yaml"
 NGINX_DEFAULT_SITE="/etc/nginx/sites-available/default"
 NGINX_CERT_DIR="/etc/nginx/cert"
@@ -59,8 +58,7 @@ apt_install() {
 }
 
 check_sudo_privileges() {
-  sudo -n true
-  if [ $? -ne 0 ]; then
+  if ! sudo -n true; then
     echo "You need sudo privilege to run this script."
     exit 1
   fi
@@ -80,7 +78,10 @@ has_ssh_config_backup() {
 }
 
 latest_ssh_config_backup() {
-  ls -1t $SSH_BACKUP_PATTERN 2>/dev/null | head -n1
+  find /etc/ssh -maxdepth 1 -name "sshd_config_decoscript.backup.*" -printf "%T@ %p\n" 2>/dev/null |
+    sort -rn |
+    head -n1 |
+    cut -d' ' -f2-
 }
 
 # ==============================================================================
@@ -286,9 +287,7 @@ install_essential_apps() {
   local configure_unattended_upgrades=false
   local configure_git_after_install=false
 
-  choices=$(dialog --clear --title "Essential Apps Installer" --checklist "Choose which apps to install:" 0 0 0 "${app_options[@]}" 2>&1 >/dev/tty)
-
-  if [ $? -ne 0 ]; then
+  if ! choices=$(dialog --clear --title "Essential Apps Installer" --checklist "Choose which apps to install:" 0 0 0 "${app_options[@]}" 2>&1 >/dev/tty); then
     clear
     echo "Canceled. Returning to the main menu."
     return
@@ -330,8 +329,7 @@ install_essential_apps() {
 
   if $install_pihole; then
     echo "Installing Pi-hole..."
-    curl -sSL https://install.pi-hole.net | bash
-    if [ $? -ne 0 ]; then
+    if ! curl -sSL https://install.pi-hole.net | bash; then
       echo "Error: Failed to install Pi-hole. Please check your internet connection and try again."
       return
     fi
@@ -376,115 +374,53 @@ is_firewalld_running() {
   sudo firewall-cmd --state >/dev/null 2>&1
 }
 
-is_armbian_system() {
-  if [ -f "/etc/armbian-release" ]; then
+# Best-effort: ensure the nf_tables kernel module is loaded before starting
+# firewalld. On some minimal SBC/Armbian images the module exists but is not
+# auto-loaded, which makes firewalld fail at startup with
+# "cache initialization failed: Invalid argument". Harmless no-op when the
+# module is already loaded; does nothing when the kernel lacks it entirely.
+ensure_netfilter_modules() {
+  if lsmod 2>/dev/null | grep -q '^nf_tables'; then
     return 0
   fi
 
-  if [ -f "/etc/os-release" ]; then
-    grep -qiE '^(ID|ID_LIKE|NAME|PRETTY_NAME)=.*armbian' /etc/os-release
+  sudo modprobe nf_tables >/dev/null 2>&1
+}
+
+# Probe whether the running kernel can actually service firewalld's backend.
+# firewalld uses the nftables backend by default on Debian/Armbian, so if the
+# 'nft' tool cannot even read the ruleset the kernel lacks working netfilter
+# support and firewalld will never start. Returns 0 if usable, 1 otherwise.
+check_netfilter_support() {
+  ensure_netfilter_modules
+
+  if command_exists nft; then
+    sudo nft list ruleset >/dev/null 2>&1
     return $?
   fi
 
-  return 1
+  # nft not present (unusual): let the firewalld start attempt be the judge.
+  return 0
 }
 
-ensure_firewalld_iptables_dependencies() {
-  local missing_packages=()
-
-  if ! package_installed iptables; then
-    missing_packages+=("iptables")
-  fi
-
-  if ! package_installed ipset; then
-    missing_packages+=("ipset")
-  fi
-
-  if [ ${#missing_packages[@]} -eq 0 ]; then
-    return 0
-  fi
-
-  echo "Installing firewalld iptables backend dependencies: ${missing_packages[*]}"
-  apt_install "${missing_packages[@]}"
-}
-
-set_firewalld_iptables_backend() {
-  local backup_name="${FIREWALLD_CONF}.decoscript.backup.$(date +%Y%m%d%H%M%S)"
-  local vendor_conf=""
-
-  echo "Trying firewalld iptables backend fallback..."
-
-  if ! ensure_firewalld_iptables_dependencies; then
-    echo "Error: Failed to install firewalld iptables backend dependencies."
-    return 1
-  fi
-
-  if [ -f "/usr/lib/firewalld/firewalld.conf" ]; then
-    vendor_conf="/usr/lib/firewalld/firewalld.conf"
-  elif [ -f "/lib/firewalld/firewalld.conf" ]; then
-    vendor_conf="/lib/firewalld/firewalld.conf"
-  fi
-
-  if [ ! -f "$FIREWALLD_CONF" ]; then
-    if ! sudo mkdir -p "$(dirname "$FIREWALLD_CONF")"; then
-      echo "Error: Failed to create /etc/firewalld."
-      return 1
-    fi
-
-    if [ -n "$vendor_conf" ]; then
-      if ! sudo cp "$vendor_conf" "$FIREWALLD_CONF"; then
-        echo "Error: Failed to copy default firewalld config from $vendor_conf."
-        return 1
-      fi
-    else
-      if ! echo "FirewallBackend=nftables" | sudo tee "$FIREWALLD_CONF" >/dev/null; then
-        echo "Error: Failed to create $FIREWALLD_CONF."
-        return 1
-      fi
-    fi
-  elif [ -n "$vendor_conf" ] && ! sudo grep -q "^DefaultZone=" "$FIREWALLD_CONF"; then
-    if ! sudo cp "$FIREWALLD_CONF" "$backup_name"; then
-      echo "Error: Failed to back up incomplete $FIREWALLD_CONF."
-      return 1
-    fi
-
-    if ! sudo cp "$vendor_conf" "$FIREWALLD_CONF"; then
-      echo "Error: Failed to restore default firewalld config from $vendor_conf."
-      return 1
-    fi
-
-    echo "Replaced incomplete $FIREWALLD_CONF. Backup saved as: $backup_name"
-  fi
-
-  if sudo grep -q "^FirewallBackend=iptables$" "$FIREWALLD_CONF"; then
-    echo "Firewalld already uses the iptables backend."
-    return 0
-  fi
-
-  if [ ! -f "$backup_name" ]; then
-    if ! sudo cp "$FIREWALLD_CONF" "$backup_name"; then
-      echo "Error: Failed to back up $FIREWALLD_CONF."
-      return 1
-    fi
-  fi
-
-  if sudo grep -q "^#\\?FirewallBackend=" "$FIREWALLD_CONF"; then
-    sudo sed -i "s/^#\\?FirewallBackend=.*/FirewallBackend=iptables/" "$FIREWALLD_CONF"
-  else
-    echo "FirewallBackend=iptables" | sudo tee -a "$FIREWALLD_CONF" >/dev/null
-  fi
-
-  if [ $? -ne 0 ]; then
-    echo "Error: Failed to set FirewallBackend=iptables."
-    return 1
-  fi
-
-  echo "Updated $FIREWALLD_CONF. Backup saved as: $backup_name"
+# Explain that the running kernel cannot run firewalld and how to fix it.
+print_unsupported_kernel_recommendation() {
+  echo
+  echo "Error: this kernel does not provide working netfilter (nftables) support,"
+  echo "so firewalld cannot be started."
+  echo
+  echo "  Running kernel: $(uname -r)"
+  echo
+  echo "Recommended fix: update the kernel and reboot, then re-run this script."
+  echo "  sudo apt update && sudo apt full-upgrade"
+  echo "  sudo reboot"
+  echo
+  echo "On Armbian you can also use 'sudo armbian-update' to move to a kernel"
+  echo "build that ships nf_tables support."
+  echo
 }
 
 start_firewalld() {
-  local backend_fallback_applied=false
-
   echo "Enabling and starting firewalld..."
 
   if ! sudo systemctl enable firewalld >/dev/null 2>&1; then
@@ -492,42 +428,24 @@ start_firewalld() {
     return 1
   fi
 
-  if is_armbian_system; then
-    echo "Armbian detected. Using firewalld iptables backend for compatibility."
-    if ! set_firewalld_iptables_backend; then
-      echo "Error: Failed to configure firewalld backend fallback."
-      return 1
-    fi
-    backend_fallback_applied=true
-  fi
-
-  if ! sudo systemctl start firewalld >/dev/null 2>&1; then
-    if $backend_fallback_applied; then
-      echo "Error: Failed to start firewalld with the iptables backend."
-      echo "Please check details with: sudo systemctl status firewalld"
-      return 1
-    fi
-
-    echo "Warning: Failed to start firewalld with the default backend."
-
-    if ! set_firewalld_iptables_backend; then
-      echo "Error: Failed to configure firewalld backend fallback."
-      return 1
-    fi
-
-    sudo systemctl reset-failed firewalld >/dev/null 2>&1 || true
-
-    if ! sudo systemctl start firewalld >/dev/null 2>&1; then
-      echo "Error: Failed to start firewalld with both nftables and iptables backends."
-      echo "Please check details with: sudo systemctl status firewalld"
-      return 1
-    fi
-  fi
-
-  if ! sudo firewall-cmd --state >/dev/null 2>&1; then
-    echo "Error: Firewalld is not running."
+  # Verify the kernel can actually run a netfilter backend before we try, so we
+  # can give a clear recommendation instead of a cryptic startup failure.
+  if ! check_netfilter_support; then
+    print_unsupported_kernel_recommendation
     return 1
   fi
+
+  # 'restart' (not 'start') re-executes a previously failed unit; confirm the
+  # daemon is actually responsive via firewall-cmd --state.
+  if sudo systemctl restart firewalld >/dev/null 2>&1 && is_firewalld_running; then
+    return 0
+  fi
+
+  echo "Error: Failed to start firewalld."
+  echo "Inspect the failure with:"
+  echo "  sudo systemctl status firewalld"
+  echo "  sudo journalctl -xeu firewalld"
+  return 1
 }
 
 add_firewalld_tcp_port() {
@@ -604,8 +522,7 @@ configure_firewall() {
   read -rp "Please provide your current SSH port (default is 22): " sshPort
   sshPort=${sshPort:-22}
 
-  validate_port "$sshPort"
-  if [ $? -ne 0 ]; then
+  if ! validate_port "$sshPort"; then
     echo "Invalid port input. Exiting."
     exit 1
   fi
@@ -615,22 +532,19 @@ configure_firewall() {
     firewalld_was_running=true
   fi
 
-  add_firewalld_tcp_port "$sshPort"
-  if [ $? -ne 0 ]; then
+  if ! add_firewalld_tcp_port "$sshPort"; then
     echo "Error: Failed to open firewall port."
     exit 1
   fi
 
   if $firewalld_was_running; then
     echo "Reload configuration..."
-    sudo firewall-cmd --reload
-    if [ $? -ne 0 ]; then
+    if ! sudo firewall-cmd --reload; then
       echo "Error: Failed to reload firewall configuration."
       exit 1
     fi
   else
-    start_firewalld
-    if [ $? -ne 0 ]; then
+    if ! start_firewalld; then
       exit 1
     fi
   fi
@@ -667,17 +581,23 @@ setup_ssh_key_authentication() {
   
   # Backup with max 5 kept
   local max_backups=5
-  local backup_name="${SSH_CONFIG}_decoscript.backup.$(date +%Y%m%d%H%M%S)"
-  
+  local backup_name
+  backup_name="${SSH_CONFIG}_decoscript.backup.$(date +%Y%m%d%H%M%S)"
+
   # Create a backup of the sshd_config file
   sudo cp "$SSH_CONFIG" "$backup_name"
   echo "Backup created: $backup_name"
-  
+
   # Clean old backups, keep only the most recent $max_backups
-  local backup_count=$(ls -1t $SSH_BACKUP_PATTERN 2>/dev/null | wc -l)
+  local backup_count
+  backup_count=$(find /etc/ssh -maxdepth 1 -name "sshd_config_decoscript.backup.*" 2>/dev/null | wc -l)
   if [ "$backup_count" -gt "$max_backups" ]; then
     echo "Cleaning old backups (keeping $max_backups most recent)..."
-    ls -1t $SSH_BACKUP_PATTERN 2>/dev/null | tail -n +$((max_backups + 1)) | xargs -r sudo rm -f
+    find /etc/ssh -maxdepth 1 -name "sshd_config_decoscript.backup.*" -printf "%T@ %p\n" 2>/dev/null |
+      sort -rn |
+      tail -n +$((max_backups + 1)) |
+      cut -d' ' -f2- |
+      xargs -r sudo rm -f
   fi
 
   echo "#######################################################"
@@ -697,9 +617,7 @@ setup_ssh_key_authentication() {
 
   # Check if the authorized_keys file exists and the key is not already present
   if [ -f "$authorized_keys_file" ] && ! grep -q "$ssh_public_key" "$authorized_keys_file"; then
-    # Save the public key to the authorized_keys file
-    echo "$ssh_public_key" >>"$authorized_keys_file"
-    if [ $? -ne 0 ]; then
+    if ! echo "$ssh_public_key" >>"$authorized_keys_file"; then
       echo "Error: Failed to save the public key to authorized_keys file."
       exit 1
     fi
@@ -707,8 +625,7 @@ setup_ssh_key_authentication() {
     echo "Public key added to authorized_keys."
   elif [ ! -f "$authorized_keys_file" ]; then
     echo "Creating authorized_keys file..."
-    echo "$ssh_public_key" >"$authorized_keys_file"
-    if [ $? -ne 0 ]; then
+    if ! echo "$ssh_public_key" >"$authorized_keys_file"; then
       echo "Error: Failed to create authorized_keys file."
       exit 1
     fi
@@ -727,8 +644,7 @@ setup_ssh_key_authentication() {
   sudo sed -i 's/^PubkeyAuthentication no/PubkeyAuthentication yes/' "$SSH_CONFIG"
 
   # Restart the SSH service for changes to take effect
-  sudo service ssh restart
-  if [ $? -ne 0 ]; then
+  if ! sudo service ssh restart; then
     echo "Error: Failed to restart the SSH service."
     exit 1
   fi
@@ -759,14 +675,12 @@ restore_ssh_config() {
   fi
 
   echo "Restoring SSH configuration..."
-  sudo cp "$backup" "$SSH_CONFIG"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$backup" "$SSH_CONFIG"; then
     echo "Error: Failed to restore SSH configuration."
     exit 1
   fi
 
-  sudo service ssh restart
-  if [ $? -ne 0 ]; then
+  if ! sudo service ssh restart; then
     echo "Error: Failed to restart the SSH service."
     exit 1
   fi
@@ -798,8 +712,7 @@ enable_passwordless_sudo() {
 
     if [[ "$enable_sudo_option" =~ ^[Yy]$ ]]; then
       # Append to /etc/sudoers using echo and sudo
-      echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo EDITOR='tee -a' visudo
-      if [ $? -ne 0 ]; then
+      if ! echo "$username ALL=(ALL) NOPASSWD:ALL" | sudo EDITOR='tee -a' visudo; then
         echo "Error: Failed to enable passwordless sudo access."
         exit 1
       fi
@@ -815,78 +728,6 @@ enable_passwordless_sudo() {
 # ==============================================================================
 # Web Server
 # ==============================================================================
-
-install_nginx_and_php() {
-  clear
-
-  local nginx_installed=false
-  
-  # Check if NGINX is already installed
-  if dpkg -l | grep -q "nginx"; then
-    echo "NGINX is already installed. Skipping NGINX installation."
-    nginx_installed=true
-  else
-    # Install NGINX
-    sudo apt install nginx -y
-    nginx_installed=true
-  fi
-
-  # Detect latest available PHP version
-  echo "Detecting latest available PHP version..."
-  local php_versions=(8.4 8.3 8.2 8.1 8.0)
-  local php_version=""
-  
-  for ver in "${php_versions[@]}"; do
-    if apt-cache policy "php$ver" 2>/dev/null | grep -q 'Candidate:'; then
-      php_version="$ver"
-      break
-    fi
-  done
-  
-  if [ -z "$php_version" ]; then
-    echo "No specific PHP version found, using default 'php' package."
-    if $nginx_installed; then
-      sudo apt install php php-fpm -y
-    else
-      sudo apt install php -y
-    fi
-  else
-    echo "Found PHP $php_version available."
-    if $nginx_installed; then
-      sudo apt install "php$php_version" "php$php_version-fpm" -y
-    else
-      sudo apt install "php$php_version" -y
-    fi
-  fi
-
-  # Remove apache2 if it exists
-  if dpkg -l | awk '/apache2/ {print }' | grep -q .; then
-    echo "Apache2 is installed. Removing."
-    sudo service apache2 stop
-    sudo apt remove apache2 -y
-    sudo apt purge apache2 -y
-    sudo apt autoremove -y
-    sudo systemctl start nginx || true
-  fi
-
-  echo "#######################################################"
-  echo "Firewall configuration"
-  echo "#######################################################"
-  configure_firewalld_ports 80 443
-  echo
-
-  # Create a directory for SSL certs if it doesn't exist
-  if [ ! -d "$NGINX_CERT_DIR" ]; then
-    echo "Creating directory $NGINX_CERT_DIR"
-    sudo mkdir -p "$NGINX_CERT_DIR"
-    sudo chmod 700 "$NGINX_CERT_DIR"
-  fi
-
-  echo
-  echo "Finished setting up NGINX and PHP."
-  echo "You can upload SSL certificates into $NGINX_CERT_DIR"
-  echo
-}
 
 # Function to show web server installation menu
 install_web_server_menu() {
@@ -1074,19 +915,24 @@ install_php_with_extensions() {
   sudo systemctl start php*-fpm
 }
 
+backup_nginx_default_site() {
+  if [ -f "$NGINX_DEFAULT_SITE" ]; then
+    sudo cp "$NGINX_DEFAULT_SITE" "${NGINX_DEFAULT_SITE}.backup"
+  fi
+}
+
 # Helper: Configure NGINX for PHP
 configure_nginx_php() {
   echo
   echo "Configuring NGINX for PHP..."
   
   # Backup default config
-  if [ -f "$NGINX_DEFAULT_SITE" ]; then
-    sudo cp "$NGINX_DEFAULT_SITE" "${NGINX_DEFAULT_SITE}.backup"
-  fi
+  backup_nginx_default_site
   
   # Detect PHP-FPM socket
-  local php_socket=$(ls /run/php/php*-fpm.sock 2>/dev/null | head -1)
-  
+  local php_socket
+  php_socket=$(find /run/php -maxdepth 1 -name "php*-fpm.sock" -print -quit 2>/dev/null)
+
   if [ -z "$php_socket" ]; then
     echo "Warning: Could not detect PHP-FPM socket. Using default."
     php_socket="/run/php/php-fpm.sock"
@@ -1139,9 +985,7 @@ configure_nginx_static() {
   echo "Configuring NGINX for static content..."
   
   # Backup default config
-  if [ -f "$NGINX_DEFAULT_SITE" ]; then
-    sudo cp "$NGINX_DEFAULT_SITE" "${NGINX_DEFAULT_SITE}.backup"
-  fi
+  backup_nginx_default_site
   
   # Create a clean static config
   sudo tee "$NGINX_DEFAULT_SITE" >/dev/null <<EOF
@@ -1229,7 +1073,9 @@ install_nvm() {
   # Using master branch to always get latest NVM
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
   export NVM_DIR="$HOME/.nvm"
+  # shellcheck source=/dev/null
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  # shellcheck source=/dev/null
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
   
   echo "Fetching available NodeJS versions (showing latest 20)..."
@@ -1327,25 +1173,22 @@ configure_fail2ban() {
   # Read user input
   read -rp "Enter your choice (1/2): " fail2ban_config_choice
 
+  echo "Installing Fail2ban..."
+  apt_install fail2ban
+
   case $fail2ban_config_choice in
   1)
-    echo "Installing Fail2ban with default configuration..."
-    # Install Fail2ban
-    sudo apt install fail2ban -y
+    echo "Using default Fail2ban configuration."
     ;;
   2)
     read -rp "Enter the URL of the user custom configuration: " fail2ban_custom_config_url
 
     # Check if the URL is valid and accessible
     if wget --spider "$fail2ban_custom_config_url" 2>/dev/null; then
-      # Install Fail2ban if not already installed
-      sudo apt install fail2ban -y
       sudo wget -O /etc/fail2ban/jail.local "$fail2ban_custom_config_url"
       echo "User custom Fail2ban configuration applied."
     else
       echo "Warning: Invalid URL or unable to reach the URL. Using the default configuration."
-      # Install Fail2ban with the default configuration
-      sudo apt install fail2ban -y
     fi
     ;;
   *)
@@ -1360,14 +1203,25 @@ configure_fail2ban() {
 # Static IP / Netplan
 # ==============================================================================
 
-cidr_to_netmask() {
-  local bits=$1
-  local mask=$((0xffffffff ^ ((1 << (32 - bits)) - 1)))
-  printf "%d.%d.%d.%d\n" \
-    $(((mask >> 24) & 0xff)) \
-    $(((mask >> 16) & 0xff)) \
-    $(((mask >> 8) & 0xff)) \
-    $((mask & 0xff))
+create_netplan_backup() {
+  local backup_dir="/etc/netplan/backups_decoscript"
+  local backup_timestamp
+
+  if [ ! -d "$backup_dir" ]; then
+    sudo mkdir -p "$backup_dir"
+  fi
+
+  backup_timestamp=$(date +%Y%m%d%H%M%S)
+  sudo cp "$NETPLAN_CONFIG" "$backup_dir/01-network-manager-all.yaml.$backup_timestamp"
+  echo "Backup created: $backup_dir/01-network-manager-all.yaml.$backup_timestamp"
+}
+
+detect_netplan_renderer() {
+  if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+    echo "NetworkManager"
+  else
+    echo "networkd"
+  fi
 }
 
 configure_static_ip() {
@@ -1416,22 +1270,15 @@ configure_static_ip() {
   fi
 
   # Backup existing netplan configs before making changes
-  local backup_dir="/etc/netplan/backups_decoscript"
-  if [ ! -d "$backup_dir" ]; then
-    sudo mkdir -p "$backup_dir"
-  fi
-  
-  local backup_timestamp=$(date +%Y%m%d%H%M%S)
   if [ -f "$NETPLAN_CONFIG" ]; then
-    sudo cp "$NETPLAN_CONFIG" "$backup_dir/01-network-manager-all.yaml.$backup_timestamp"
-    echo "Backup created: $backup_dir/01-network-manager-all.yaml.$backup_timestamp"
+    create_netplan_backup
   fi
 
   # Determine renderer based on what's actually being used
-  local renderer="networkd"
-  if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+  local renderer
+  renderer=$(detect_netplan_renderer)
+  if [ "$renderer" = "NetworkManager" ]; then
     echo "NetworkManager is active, using NetworkManager renderer."
-    renderer="NetworkManager"
   else
     echo "Using networkd renderer (systemd-networkd)."
   fi
@@ -1501,21 +1348,13 @@ revert_static_ip() {
     return
   fi
   
-  # Create backup before reverting
-  local backup_dir="/etc/netplan/backups_decoscript"
-  if [ ! -d "$backup_dir" ]; then
-    sudo mkdir -p "$backup_dir"
-  fi
-  
-  local backup_timestamp=$(date +%Y%m%d%H%M%S)
-  sudo cp "$NETPLAN_CONFIG" "$backup_dir/01-network-manager-all.yaml.$backup_timestamp"
-  echo "Backup created: $backup_dir/01-network-manager-all.yaml.$backup_timestamp"
+  create_netplan_backup
   
   # Determine renderer
-  local renderer="networkd"
-  if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+  local renderer
+  renderer=$(detect_netplan_renderer)
+  if [ "$renderer" = "NetworkManager" ]; then
     echo "NetworkManager is active, using NetworkManager renderer."
-    renderer="NetworkManager"
   else
     echo "Using networkd renderer (systemd-networkd)."
   fi
@@ -1536,16 +1375,15 @@ EOL
   
   # Apply the configuration
   echo "Applying DHCP configuration..."
-  sudo netplan apply
-  
-  if [ $? -eq 0 ]; then
+
+  if sudo netplan apply; then
     echo
     echo "Successfully reverted to DHCP configuration."
     echo "Your network device '$network_device' will now obtain IP address automatically."
   else
     echo
     echo "Error: Failed to apply netplan configuration."
-    echo "You can restore from backup: $backup_dir/01-network-manager-all.yaml.$backup_timestamp"
+    echo "You can restore from the backup shown above."
   fi
 }
 
