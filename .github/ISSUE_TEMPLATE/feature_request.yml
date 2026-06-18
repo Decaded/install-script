@@ -1,0 +1,82 @@
+name: Feature request
+description: Suggest a new option, improvement, or behavior change.
+title: "Feature: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please describe the use case first, then the proposed change.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What would you like the script to do?
+      placeholder: Add an option to install...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve, and who is it for?
+      placeholder: This helps when setting up...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the menu option, prompts, defaults, and expected result.
+      placeholder: |
+        The script should show...
+        It should ask...
+        It should install/configure...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      options:
+        - Essential Apps
+        - Web Server
+        - NVM / Node.js
+        - SSH
+        - Firewall
+        - Fail2ban
+        - Static IP / Netplan
+        - Script updates
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional, but useful if there are multiple tools or approaches.
+      placeholder: I considered X, but Y would fit better because...
+
+  - type: textarea
+    id: system
+    attributes:
+      label: Target system or environment
+      description: If this feature is specific to an OS, architecture, provider, or device, include that here.
+      placeholder: Ubuntu 24.04, Debian 12, Armbian on Radxa ROCK 5, VPS provider, etc.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the existing issues and did not find a duplicate.
+          required: true
+        - label: This request fits the scope of a Debian/Ubuntu server setup script.
+          required: true

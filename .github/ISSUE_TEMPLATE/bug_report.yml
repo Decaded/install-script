@@ -1,0 +1,98 @@
+name: Bug report
+description: Report something that is broken or behaving unexpectedly.
+title: "Bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please include enough system detail to make the issue reproducible.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you were trying to do.
+      placeholder: I selected the firewall option and firewalld failed to start...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: The script should have...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: menu_option
+    attributes:
+      label: Which menu option was involved?
+      options:
+        - Install Essential Apps
+        - Install Web Server
+        - Install Node Version Manager
+        - Enable Passwordless sudo access
+        - Set up SSH key-based authentication
+        - Configure Static IP Address
+        - Configure Fail2ban
+        - Revert Static IP to DHCP
+        - Check for script updates
+        - Restore SSH Configuration
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: system
+    attributes:
+      label: System details
+      description: Paste the output of these commands if possible.
+      value: |
+        OS:
+        Kernel:
+        Architecture:
+        Install script version:
+
+        Commands:
+        cat /etc/os-release
+        uname -a
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output or logs
+      description: Paste the script output, terminal error, or service logs. Remove secrets, public IPs, keys, and passwords.
+      render: shell
+      placeholder: |
+        Error: ...
+        sudo systemctl status ...
+        sudo journalctl -xeu ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the exact choices or commands that trigger the bug.
+      placeholder: |
+        1. Run ./install.sh
+        2. Select ...
+        3. Enter ...
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the existing issues and did not find a duplicate.
+          required: true
+        - label: I removed secrets, passwords, private keys, and sensitive IPs from the report.
+          required: true
