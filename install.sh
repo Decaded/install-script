@@ -210,7 +210,7 @@ check_for_updates() {
 update_script() {
   echo
   echo "Downloading latest version..."
-  local temp_script="/tmp/install_sh_update_$"
+  local temp_script="/tmp/install_sh_update_$$"
   
   if curl -fsSL --max-time 10 -o "$temp_script" "$SCRIPT_URL" 2>/dev/null; then
     # Verify the download
@@ -218,7 +218,9 @@ update_script() {
       chmod +x "$temp_script"
       
       # Backup current script and remove execute permissions from backup
-      cp "$0" "${0}.backup" 2>/dev/null && chmod -x "${0}.backup" 2>/dev/null || true
+      if cp "$0" "${0}.backup" 2>/dev/null; then
+        chmod -x "${0}.backup" 2>/dev/null || true
+      fi
       
       # Replace with new version
       mv "$temp_script" "$0"
