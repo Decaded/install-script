@@ -2,11 +2,11 @@
 
 ## Overview
 
-This script is a menu-driven server utility tool for Debian-based and Ubuntu-based systems. It helps automate common setup tasks without forcing a specific stack. You choose exactly
-what gets installed: essential tools, Nginx, PHP, NVM, static IP profiles, and more.
+This is a menu-driven server utility script for Ubuntu and other Debian-based systems. It helps automate common setup tasks without forcing one fixed stack. You choose what to install or configure:
+essential tools, Nginx, PHP, MySQL, NVM, SSH hardening, Fail2ban, static IP profiles, and more.
 
-Ubuntu is the primary target environment. Other Debian derivatives should work, but if you encounter issues, feel free to open an
-[issue](https://github.com/Decaded/install-script/issues) and describe your setup.
+Ubuntu is the primary target environment. Other Debian derivatives should work, but some minimal images, SBC images, and custom kernels may need extra care. If you encounter an issue,
+open an [issue](https://github.com/Decaded/install-script/issues) and include your OS, kernel version, and the menu option that failed.
 
 <div align="center">
   <a href="https://github.com/Decaded/install-script">
@@ -45,9 +45,7 @@ Ubuntu is the primary target environment. Other Debian derivatives should work, 
    ./install.sh
    ```
 
-The script requires sudo privileges. If your sudo session is not already active, run `sudo -v` first.
-
-A menu will appear with all available options.
+The script requires sudo privileges and checks for them on startup. A menu will appear with the available actions.
 
 <div align="center">
   <img src="images/main_menu.png" alt="Script Menu Preview">
@@ -57,45 +55,53 @@ A menu will appear with all available options.
 
 ## Features
 
+### Main Menu
+
+- Install selected essential apps
+- Install a web server stack
+- Install Node Version Manager (NVM)
+- Enable passwordless sudo
+- Configure SSH key-only authentication
+- Configure a static IP address
+- Configure Fail2ban
+- Revert static IP configuration to DHCP
+- Check for script updates
+- Restore SSH configuration when a backup exists
+
 ### Essential Tools
 
-Install a curated pack of common system utilities:
+Install any combination of common utilities from a checklist:
 
-1. **[htop](https://htop.dev/)** or **[btop](https://github.com/aristocratos/btop)** – process viewer
-2. **[screen](https://www.gnu.org/software/screen/)** or **[tmux](https://github.com/tmux/tmux/wiki)** – terminal multiplexer
-3. **[nload](https://github.com/rolandriegel/nload)** – network traffic monitor
-4. **[nano](https://www.nano-editor.org/)** or **[Neovim](https://neovim.io/)** – text editor
-5. **[firewalld](https://firewalld.org/)** – firewall management
+- **[htop](https://htop.dev/)** and **[btop](https://github.com/aristocratos/btop)** - process viewers
+- **[screen](https://www.gnu.org/software/screen/)** and **[tmux](https://github.com/tmux/tmux/wiki)** - terminal multiplexers
+- **[nload](https://github.com/rolandriegel/nload)** - network traffic monitor
+- **[nano](https://www.nano-editor.org/)** and **[Neovim](https://neovim.io/)** - text editors
+- **[firewalld](https://firewalld.org/)** - firewall management
+- **[fail2ban](https://github.com/fail2ban/fail2ban)** - intrusion prevention
+- **[git](https://git-scm.com/)** - version control
+- **[unattended-upgrades](https://wiki.debian.org/UnattendedUpgrades)** - automatic security updates
+- **[Pi-hole](https://pi-hole.net/)** - ad blocker and optional DHCP server
 
-   - Automatically opens SSH
-   - Checks for working netfilter support before starting firewalld
-
-6. **[fail2ban](https://github.com/fail2ban/fail2ban)** – intrusion prevention
-
-   - Default configuration or custom rules
-
-7. **[git](https://git-scm.com/)** – version control
-
-   - Optional first-time setup
-
-8. **[unattended-upgrades](https://wiki.debian.org/UnattendedUpgrades)** – automatic security updates
-9. **[Pi-hole](https://pi-hole.net/)** – ad blocker and optional DHCP server
+When selected, some tools offer follow-up configuration. Firewalld asks for the current SSH port, opens that port, and checks for working netfilter/nftables support before trying to start
+the service. Fail2ban can use the default setup or a custom `jail.local` URL. Git can configure global name, email, and default branch.
 
 ### SSH Configuration
 
-Switch to secure, key-only SSH authentication. The script:
+Switch to key-only SSH authentication. The script:
 
 - Disables password-based logins
+- Enables public key authentication
+- Adds the provided public key to `~/.ssh/authorized_keys`
 - Creates a backup of your SSH config
-- Provides a restore option
+- Provides a restore option when a backup exists
 
 Backup file location:
 
-``` bash
+```bash
 /etc/ssh/sshd_config_decoscript.backup.*
 ```
 
-The script keeps the five most recent SSH config backups and offers a restore option from the main menu when a backup exists.
+The script keeps the five most recent SSH config backups.
 
 ### Passwordless Sudo
 
@@ -103,28 +109,20 @@ Enables password-free sudo access if desired. If your system already uses this c
 
 ### Web Server Setup
 
-- Automatic cleanup of Apache2 if present
-- Firewall rules for HTTP(S) when using firewalld
+Choose one of three web server paths:
 
-Installs the full **LEMP** stack:
+- Full **LEMP** stack: **[Nginx](https://nginx.org/)**, **[MySQL](https://www.mysql.com/)**, and **[PHP](https://www.php.net/)**
+- **Nginx + PHP**
+- **Nginx only**
 
-- **[Nginx](https://nginx.org/)** installation and configuration
-- **[MySQL](https://www.mysql.com/)** installation with optional `mysql_secure_installation`
-- **[PHP](https://www.php.net/)** installation with commonly used modules
+The web server setup can:
 
-  - Configures **php-fpm** to work with Nginx
-  - Installs modules:
-    - **php-cli**
-    - **php-fpm**
-    - **php-mbstring**
-    - **php-curl**
-    - **php-xml**
-    - **php-zip**
-    - **php-gd**
-    - **php-mysql**
-
-- **OR** install Nginx and PHP only,
-- **OR** install only Nginx.
+- Remove Apache2 if it is installed, to avoid port conflicts
+- Enable and start Nginx
+- Install common PHP/FPM packages and configure Nginx for PHP
+- Create `/etc/nginx/cert` for SSL certificates
+- Create a simple default page if the web root is empty
+- Open HTTP and HTTPS ports when firewalld is available
 
 ### Node.js via NVM
 
@@ -135,7 +133,7 @@ Installs the latest **[NVM](https://github.com/nvm-sh/nvm)** version and lets yo
 
 ### Static IP Configuration
 
-Configure a static IP address using **Netplan** when available.
+Configure a static IP address using **Netplan**.
 
 Supports:
 
@@ -144,7 +142,22 @@ Supports:
 - Gateway
 - DNS servers
 
-If Netplan isn’t present, the script installs `netplan.io` before writing the configuration. A revert option is available from the main menu.
+If Netplan is not present, the script installs `netplan.io` before writing the configuration. It also installs `net-tools` when needed to list network interfaces.
+
+Before changing an existing Netplan file, the script creates a backup under:
+
+```bash
+/etc/netplan/backups_decoscript/
+```
+
+A revert option is available from the main menu to switch an interface back to DHCP.
+
+---
+
+## Notes
+
+- Firewalld depends on working kernel netfilter/nftables support. On some minimal Armbian or SBC images, firewalld may not be usable until the kernel is updated and the system is rebooted.
+- SSH and network changes can disconnect you from a remote server if incorrect values are entered. Keep another access path available when possible.
 
 ---
 
