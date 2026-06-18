@@ -1,13 +1,20 @@
 {
   "cSpell.words": [
+    "Armbian",
+    "btop",
     "decoscript",
     "ethernets",
     "fastcgi",
+    "journalctl",
     "LEMP",
     "mbstring",
+    "netfilter",
     "Netplan",
     "networkd",
+    "nftables",
     "NOPASSWD",
-    "phpinfo"
+    "phpinfo",
+    "pihole",
+    "shellcheck"
   ]
 }
